@@ -3,256 +3,227 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pa-Ayo | Community Infrastructure Reporting</title>
+  <title>Pa-Ayo | Community Infrastructure Reporting &amp; Gov Updates</title>
   <link rel="stylesheet" href="../static/css/style.css" th:href="@{/css/style.css}">
 </head>
 <body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" th:href="@{/}" class="brand-link">
+        <img src="../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
+        <div>
+          <p class="brand-title">Pa-Ayo</p>
+          <p class="brand-tagline">Atong komunidad. Atong responsibilidad.</p>
+        </div>
+      </a>
 
-  <a href="#main-content" class="skip-link">Skip to main content</a>
-
-  <header class="navbar">
-    <a href="index.html" th:href="@{/}" class="brand">
-      <img src="../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
-      <div>
-        <div class="brand-title">Pa-Ayo</div>
-        <div class="brand-tagline">Atong komunidad. Atong responsibilidad.</div>
-      </div>
-    </a>
-    <nav class="nav-actions" aria-label="Main navigation">
-      <a href="report.html" th:href="@{/reports/new}" class="btn-primary">+ Report an Issue</a>
-      <a href="admin/login.html" th:href="@{/admin/login}" class="nav-link" th:if="${isAdmin == null or !isAdmin}">Admin Login</a>
-      <a href="admin/dashboard.html" th:href="@{/admin/dashboard}" class="nav-link" style="display: none;" th:if="${isAdmin}" th:style="'display: inline;'"><span aria-hidden="true">&larr;</span> Admin Dashboard</a>
-    </nav>
+      <nav class="header-actions" aria-label="Primary Navigation">
+        <a href="report.html" th:href="@{/reports/new}" class="btn btn-primary">+ Report an Issue</a>
+        <a th:if="${isAdmin == true}" href="admin/dashboard.html" th:href="@{/admin/dashboard}" class="btn btn-link">Admin Dashboard</a>
+        <a th:unless="${isAdmin == true}" href="admin/login.html" th:href="@{/admin/login}" class="btn btn-link">Admin Login</a>
+      </nav>
+    </div>
   </header>
 
-  <main id="main-content" class="dashboard-wrapper">
+  <main class="dashboard-layout">
+    <!-- Left Sidebar: DPWH & Gov Updates -->
+    <aside class="news-sidebar" aria-labelledby="news-heading">
+      <h2 id="news-heading" class="sidebar-heading">DPWH &amp; Gov Updates</h2>
 
-    <aside class="news-sidebar" aria-label="DPWH and Government Updates">
-      <h2 class="sidebar-header">DPWH &amp; Gov Updates</h2>
+      <div class="news-list">
+        <div th:if="${newsList != null and #lists.isEmpty(newsList)}" class="news-card">
+          <p class="news-summary">No official advisories published yet. Check back soon.</p>
+        </div>
 
-      <article class="news-card" th:each="item : ${newsList}" style="display: none;" th:style="'display: block;'">
-        <div class="news-media">
-          <img th:if="${item.imageUrl != null and !item.imageUrl.isEmpty()}" th:src="${item.imageUrl}" th:alt="${item.title}" alt="Advisory photo">
-          <div th:if="${item.imageUrl == null or item.imageUrl.isEmpty()}" class="news-placeholder">No Photo Available</div>
-        </div>
-        <span class="news-source" th:text="${item.source}">DPWH Region VII</span>
-        <h3 class="news-title" th:text="${item.title}">Road Repair Advisory</h3>
-        <p class="news-snippet" th:text="${item.snippet}">Advisory details.</p>
-        <div class="news-footer">
-          <span th:text="${item.publishedDate}">Nov 18, 2026</span>
-          <a th:href="${item.sourceUrl}" th:aria-label="'Read source for ' + ${item.title}">Read source</a>
-        </div>
-      </article>
-
-      <article class="news-card" th:remove="all">
-        <div class="news-media">
-          <div class="news-placeholder">Gov Advisory Photo</div>
-        </div>
-        <span class="news-source">DPWH Region VII</span>
-        <h3 class="news-title">Road Repair Advisory</h3>
-        <p class="news-snippet">Nighttime asphalt reblocking scheduled along M.C. Briones St.</p>
-        <div class="news-footer">
-          <span>Nov 19, 2026</span>
-          <a href="#" aria-label="Read source for Road Repair Advisory">Read source</a>
-        </div>
-      </article>
-
-      <article class="news-card" th:remove="all">
-        <div class="news-media">
-          <div class="news-placeholder">Gov Advisory Photo</div>
-        </div>
-        <span class="news-source">Mandaue City PIO</span>
-        <h3 class="news-title">Drainage Clearing</h3>
-        <p class="news-snippet">Engineering crews are desilting main storm drains along Hernan Cortes St.</p>
-        <div class="news-footer">
-          <span>Nov 18, 2026</span>
-          <a href="#" aria-label="Read source for Drainage Clearing">Read source</a>
-        </div>
-      </article>
-
-      <article class="news-card" th:remove="all">
-        <div class="news-media">
-          <div class="news-placeholder">Gov Advisory Photo</div>
-        </div>
-        <span class="news-source">Mandaue City PIO</span>
-        <h3 class="news-title">Streetlight Upgrades</h3>
-        <p class="news-snippet">Replacement of busted LED lamps is underway across five barangays.</p>
-        <div class="news-footer">
-          <span>Nov 17, 2026</span>
-          <a href="#" aria-label="Read source for Streetlight Upgrades">Read source</a>
-        </div>
-      </article>
-
-      <article class="news-card" th:remove="all">
-        <div class="news-media">
-          <div class="news-placeholder">Gov Advisory Photo</div>
-        </div>
-        <span class="news-source">DPWH Region VII</span>
-        <h3 class="news-title">Bridge Inspection Notice</h3>
-        <p class="news-snippet">Routine structural inspection at Marcelo Fernan Bridge starting 10:00 PM.</p>
-        <div class="news-footer">
-          <span>Nov 16, 2026</span>
-          <a href="#" aria-label="Read source for Bridge Inspection Notice">Read source</a>
-        </div>
-      </article>
-
-      <article class="news-card" th:remove="all">
-        <div class="news-media">
-          <div class="news-placeholder">Gov Advisory Photo</div>
-        </div>
-        <span class="news-source">Mandaue City PIO</span>
-        <h3 class="news-title">Solid Waste Schedule</h3>
-        <p class="news-snippet">Updated garbage collection hours announced for Banilad and Tipolo zones.</p>
-        <div class="news-footer">
-          <span>Nov 15, 2026</span>
-          <a href="#" aria-label="Read source for Solid Waste Schedule">Read source</a>
-        </div>
-      </article>
-    </aside>
-
-    <section aria-labelledby="reports-heading">
-      <div class="reports-header">
-        <h1 id="reports-heading">Community Reports</h1>
-        <p class="reports-subtitle">Check existing reports below before filing a new issue in your barangay.</p>
-      </div>
-
-      <nav class="filter-tabs" aria-label="Filter reports by category">
-        <a href="?category=ALL" th:href="@{/(category='ALL')}" onclick="return filterReports('ALL', this)"
-           class="filter-tab active" aria-current="page"
-           th:class="${selectedCategory == null or selectedCategory == 'ALL' ? 'filter-tab active' : 'filter-tab'}"
-           th:attr="aria-current=${selectedCategory == null or selectedCategory == 'ALL' ? 'page' : null}">All Reports</a>
-        <a href="?category=Sanitation" th:href="@{/(category='Sanitation')}" onclick="return filterReports('Sanitation', this)"
-           class="filter-tab"
-           th:class="${selectedCategory == 'Sanitation' ? 'filter-tab active' : 'filter-tab'}"
-           th:attr="aria-current=${selectedCategory == 'Sanitation' ? 'page' : null}">Sanitation</a>
-        <a href="?category=Roadworks" th:href="@{/(category='Roadworks')}" onclick="return filterReports('Roadworks', this)"
-           class="filter-tab"
-           th:class="${selectedCategory == 'Roadworks' ? 'filter-tab active' : 'filter-tab'}"
-           th:attr="aria-current=${selectedCategory == 'Roadworks' ? 'page' : null}">Roadworks</a>
-        <a href="?category=Electrical" th:href="@{/(category='Electrical')}" onclick="return filterReports('Electrical', this)"
-           class="filter-tab"
-           th:class="${selectedCategory == 'Electrical' ? 'filter-tab active' : 'filter-tab'}"
-           th:attr="aria-current=${selectedCategory == 'Electrical' ? 'page' : null}">Electrical</a>
-      </nav>
-
-      <div class="reports-grid">
-
-        <article class="report-card" th:each="report : ${reports}" style="display: none;" th:style="'display: flex;'">
-          <div class="card-media">
-            <img th:if="${report.imageUrl != null and !report.imageUrl.isEmpty()}" th:src="${report.imageUrl}" th:alt="${report.title}" alt="Report photo">
-            <div th:if="${report.imageUrl == null or report.imageUrl.isEmpty()}" class="card-placeholder">No Photo Attached</div>
-            <div class="card-badges">
-              <span class="badge"
-                    th:classappend="${report.category == 'Sanitation' ? 'badge-sanitation' : (report.category == 'Roadworks' ? 'badge-roadworks' : 'badge-electrical')}"
-                    th:text="${report.category}">Sanitation</span>
-              <span class="badge"
-                    th:classappend="${report.status == 'Reported' ? 'status-reported' : (report.status == 'In Progress' ? 'status-progress' : 'status-resolved')}"
-                    th:text="${report.status}">Reported</span>
-            </div>
+        <article class="news-card" th:each="item : ${newsList}">
+          <div class="news-thumb-wrap">
+            <img th:if="${item.imageUrl != null and !#strings.isEmpty(item.imageUrl)}"
+                 th:src="${item.imageUrl}"
+                 th:alt="${item.title}"
+                 loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <span class="placeholder-label"
+                  th:style="${item.imageUrl != null and !#strings.isEmpty(item.imageUrl)} ? 'display:none;' : ''">
+              Gov Advisory Photo
+            </span>
           </div>
-          <div class="card-body">
-            <h2 class="card-title" th:text="${report.title}">Clogged Storm Drain</h2>
-            <div class="card-location"><span aria-hidden="true">&#128205;</span> <span th:text="${report.location}">A.S. Fortuna St., Banilad</span></div>
-            <p class="card-desc" th:text="${report.description}">Debris blocking the main storm drain.</p>
-            <div class="card-date" th:text="${report.createdAt}">Nov 18, 2026</div>
+          <span class="news-source-badge" th:text="${item.sourceName}">DPWH Region VII</span>
+          <h3 class="news-title" th:text="${item.title}">Road Repair Advisory</h3>
+          <p class="news-summary" th:text="${item.summary}">
+            Nighttime asphalt reblocking scheduled along M.C. Briones St.
+          </p>
+          <div class="news-meta">
+            <time th:text="${item.publishedDate != null ? #temporals.format(item.publishedDate, 'MMM d, yyyy') : ''}">Nov 19, 2026</time>
+            <a th:href="${item.sourceUrl}" target="_blank" rel="noopener noreferrer" class="news-link">Read source</a>
           </div>
         </article>
 
-        <article class="report-card" data-preview="true" data-category="Sanitation" th:remove="all">
+        <!-- Static preview cards (automatically stripped by Thymeleaf at runtime) -->
+        <article class="news-card" th:remove="all">
+          <div class="news-thumb-wrap">
+            <span class="placeholder-label">Gov Advisory Photo</span>
+          </div>
+          <span class="news-source-badge">DPWH Region VII</span>
+          <h3 class="news-title">Road Repair Advisory</h3>
+          <p class="news-summary">Nighttime asphalt reblocking scheduled along M.C. Briones St.</p>
+          <div class="news-meta">
+            <time>Nov 19, 2026</time>
+            <a href="#" class="news-link">Read source</a>
+          </div>
+        </article>
+
+        <article class="news-card" th:remove="all">
+          <div class="news-thumb-wrap">
+            <span class="placeholder-label">Gov Advisory Photo</span>
+          </div>
+          <span class="news-source-badge">Mandaue City PIO</span>
+          <h3 class="news-title">Drainage Clearing</h3>
+          <p class="news-summary">Engineering crews are desilting main storm drains along Hernan Cortes St.</p>
+          <div class="news-meta">
+            <time>Nov 18, 2026</time>
+            <a href="#" class="news-link">Read source</a>
+          </div>
+        </article>
+      </div>
+    </aside>
+
+    <!-- Right Main Feed: 4-Column Community Report Grid -->
+    <section aria-labelledby="reports-heading">
+      <div class="section-header">
+        <h1 id="reports-heading">Community Reports</h1>
+        <p>Check existing reports below before filing a new issue in your barangay.</p>
+      </div>
+
+      <div th:if="${successMessage != null}" class="alert alert-success" role="status" th:text="${successMessage}">
+        Report submitted successfully.
+      </div>
+      <div th:if="${errorMessage != null}" class="alert alert-error" role="alert" th:text="${errorMessage}">
+        Unable to load reports right now. Please try again.
+      </div>
+
+      <nav class="filter-pills" aria-label="Filter Reports by Category">
+        <a th:href="@{/}"
+           href="index.html"
+           class="pill"
+           th:classappend="${selectedCategory == null or selectedCategory == 'ALL'} ? ' active' : ''">All Reports</a>
+        <a th:href="@{/(category='SANITATION')}"
+           href="?category=SANITATION"
+           class="pill"
+           th:classappend="${selectedCategory == 'SANITATION'} ? ' active' : ''">Sanitation</a>
+        <a th:href="@{/(category='ROADWORKS')}"
+           href="?category=ROADWORKS"
+           class="pill"
+           th:classappend="${selectedCategory == 'ROADWORKS'} ? ' active' : ''">Roadworks</a>
+        <a th:href="@{/(category='ELECTRICAL')}"
+           href="?category=ELECTRICAL"
+           class="pill"
+           th:classappend="${selectedCategory == 'ELECTRICAL'} ? ' active' : ''">Electrical</a>
+      </nav>
+
+      <div class="report-grid">
+        <div th:if="${reports != null and #lists.isEmpty(reports)}" class="empty-state">
+          <p><strong>No reports found for this category.</strong></p>
+          <p>Use "+ Report an Issue" to submit the first report for your barangay.</p>
+        </div>
+
+        <article class="report-card" th:each="report : ${reports}">
           <div class="card-media">
-            <div class="card-placeholder">No Photo Attached</div>
+            <div class="card-badges">
+              <span class="badge"
+                    th:classappend="' badge-' + ${#strings.toLowerCase(report.category.name())}"
+                    th:text="${report.category.displayName}">Sanitation</span>
+              <span class="badge"
+                    th:classappend="' badge-' + ${#strings.toLowerCase(report.status.name())}"
+                    th:text="${report.status.displayName}">Reported</span>
+            </div>
+
+            <img th:if="${report.imageUrl != null and !#strings.isEmpty(report.imageUrl)}"
+                 th:src="${report.imageUrl}"
+                 th:alt="${report.title}"
+                 loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <span class="placeholder-label"
+                  th:style="${report.imageUrl != null and !#strings.isEmpty(report.imageUrl)} ? 'display:none;' : ''">
+              No Photo Attached
+            </span>
+          </div>
+
+          <div class="card-body">
+            <h2 class="card-title" th:text="${report.title}">Clogged Storm Drain</h2>
+            <p class="card-location" th:text="'📍 ' + ${report.location}">📍 A.S. Fortuna St., Banilad</p>
+            <p class="card-description" th:text="${report.description}">Debris blocking the main storm drain.</p>
+            <div class="card-footer">
+              <time th:text="${report.createdAt != null ? #temporals.format(report.createdAt, 'MMM d, yyyy') : ''}">Nov 18, 2026</time>
+            </div>
+          </div>
+        </article>
+
+        <!-- Static preview cards (automatically stripped by Thymeleaf at runtime) -->
+        <article class="report-card" th:remove="all">
+          <div class="card-media">
             <div class="card-badges">
               <span class="badge badge-sanitation">Sanitation</span>
-              <span class="badge status-reported">Reported</span>
+              <span class="badge badge-reported">Reported</span>
             </div>
+            <span class="placeholder-label">No Photo Attached</span>
           </div>
           <div class="card-body">
             <h2 class="card-title">Clogged Storm Drain</h2>
-            <div class="card-location"><span aria-hidden="true">&#128205;</span> A.S. Fortuna St., Banilad</div>
-            <p class="card-desc">Debris blocking the main storm drain.</p>
-            <div class="card-date">Nov 18, 2026</div>
+            <p class="card-location">📍 A.S. Fortuna St., Banilad</p>
+            <p class="card-description">Debris blocking the main storm drain.</p>
+            <div class="card-footer"><time>Nov 18, 2026</time></div>
           </div>
         </article>
 
-        <article class="report-card" data-preview="true" data-category="Roadworks" th:remove="all">
+        <article class="report-card" th:remove="all">
           <div class="card-media">
-            <div class="card-placeholder">No Photo Attached</div>
             <div class="card-badges">
               <span class="badge badge-roadworks">Roadworks</span>
-              <span class="badge status-progress">In Progress</span>
+              <span class="badge badge-in_progress">In Progress</span>
             </div>
+            <span class="placeholder-label">No Photo Attached</span>
           </div>
           <div class="card-body">
             <h2 class="card-title">Deep Lane Pothole</h2>
-            <div class="card-location"><span aria-hidden="true">&#128205;</span> Subangdaku Highway</div>
-            <p class="card-desc">Large pothole causing traffic hazard.</p>
-            <div class="card-date">Nov 17, 2026</div>
+            <p class="card-location">📍 Subangdaku Highway</p>
+            <p class="card-description">Large pothole causing traffic hazard.</p>
+            <div class="card-footer"><time>Nov 17, 2026</time></div>
           </div>
         </article>
 
-        <article class="report-card" data-preview="true" data-category="Electrical" th:remove="all">
+        <article class="report-card" th:remove="all">
           <div class="card-media">
-            <div class="card-placeholder">No Photo Attached</div>
             <div class="card-badges">
               <span class="badge badge-electrical">Electrical</span>
-              <span class="badge status-resolved">Resolved</span>
+              <span class="badge badge-resolved">Resolved</span>
             </div>
+            <span class="placeholder-label">No Photo Attached</span>
           </div>
           <div class="card-body">
             <h2 class="card-title">Busted Corner Streetlamp</h2>
-            <div class="card-location"><span aria-hidden="true">&#128205;</span> P. Burgos St., Centro</div>
-            <p class="card-desc">Dark corner needs replacement lamp.</p>
-            <div class="card-date">Nov 17, 2026</div>
+            <p class="card-location">📍 P. Burgos St., Centro</p>
+            <p class="card-description">Dark corner needs replacement lamp.</p>
+            <div class="card-footer"><time>Nov 17, 2026</time></div>
           </div>
         </article>
 
-        <article class="report-card" data-preview="true" data-category="Sanitation" th:remove="all">
+        <article class="report-card" th:remove="all">
           <div class="card-media">
-            <div class="card-placeholder">No Photo Attached</div>
             <div class="card-badges">
               <span class="badge badge-sanitation">Sanitation</span>
-              <span class="badge status-reported">Reported</span>
+              <span class="badge badge-reported">Reported</span>
             </div>
+            <span class="placeholder-label">No Photo Attached</span>
           </div>
           <div class="card-body">
             <h2 class="card-title">Uncollected Garbage Pile</h2>
-            <div class="card-location"><span aria-hidden="true">&#128205;</span> Sitio Maharlika, Tipolo</div>
-            <p class="card-desc">Garbage pile on the sidewalk.</p>
-            <div class="card-date">Nov 17, 2026</div>
+            <p class="card-location">📍 Sitio Maharlika, Tipolo</p>
+            <p class="card-description">Garbage pile on the sidewalk.</p>
+            <div class="card-footer"><time>Nov 17, 2026</time></div>
           </div>
         </article>
-
       </div>
     </section>
-
   </main>
-
-  <script>
-    function filterReports(category, clickedTab) {
-      var cards = document.querySelectorAll('.report-card[data-preview="true"]');
-      if (cards.length == 0) {
-        return true;
-      }
-
-      var tabs = document.getElementsByClassName("filter-tab");
-      for (var i = 0; i < tabs.length; i++) {
-        tabs[i].classList.remove("active");
-        tabs[i].removeAttribute("aria-current");
-      }
-      clickedTab.classList.add("active");
-      clickedTab.setAttribute("aria-current", "page");
-
-      for (var j = 0; j < cards.length; j++) {
-        var cardCategory = cards[j].getAttribute("data-category");
-        if (category == "ALL" || cardCategory == category) {
-          cards[j].style.display = "flex";
-        } else {
-          cards[j].style.display = "none";
-        }
-      }
-
-      return false;
-    }
-  </script>
 </body>
 </html>
