@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login | Pa-Ayo</title>
+  <link rel="stylesheet" href="../../static/css/style.css" th:href="@{/css/style.css}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="../index.html" th:href="@{/}" class="brand-link">
+        <img src="../../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
+        <div>
+          <p class="brand-title">Pa-Ayo Admin</p>
+          <p class="brand-tagline">Barangay &amp; LGU Issue Control</p>
+        </div>
+      </a>
+
+      <nav class="header-actions" aria-label="Admin Navigation">
+        <a href="../index.html" th:href="@{/}" class="btn btn-link">&larr; View Public Site</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="centered-page auth-narrow">
+    <section class="form-card" aria-labelledby="login-heading">
+      <h1 id="login-heading">Administrator Sign In</h1>
+      <p class="form-subtitle">Authorized barangay and municipal personnel only.</p>
+
+      <div th:if="${param.error != null}" class="alert alert-error" role="alert">
+        Invalid username or password. Please try again.
+      </div>
+      <div th:if="${param.logout != null}" class="alert alert-info" role="status">
+        You have been signed out successfully.
+      </div>
+      <div th:if="${resetSuccess != null}" class="alert alert-success" role="status" th:text="${resetSuccess}">
+        Your password has been updated. Please sign in with your new password.
+      </div>
+
+      <form method="post" th:action="@{/admin/login}">
+        <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text"
+                 id="username"
+                 name="username"
+                 class="form-control"
+                 autocomplete="username"
+                 required
+                 placeholder="Enter admin username">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password"
+                 id="password"
+                 name="password"
+                 class="form-control"
+                 autocomplete="current-password"
+                 required
+                 placeholder="Enter password">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+      </form>
+
+      <div class="auth-footer-links">
+        <a href="forgot-password.html" th:href="@{/admin/forgot-password}">Forgot Password?</a>
+        <a href="../index.html" th:href="@{/}">Back to Public Dashboard</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
