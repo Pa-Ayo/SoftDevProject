@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report an Issue | Pa-Ayo</title>
+  <link rel="stylesheet" href="../static/css/style.css" th:href="@{/css/style.css}">
+</head>
+<body>
+
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header class="navbar">
+    <a href="index.html" th:href="@{/}" class="brand">
+      <img src="../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
+      <div>
+        <div class="brand-title">Pa-Ayo</div>
+        <div class="brand-tagline">Atong komunidad. Atong responsibilidad.</div>
+      </div>
+    </a>
+    <nav class="nav-actions" aria-label="Main navigation">
+      <a href="index.html" th:href="@{/}" class="nav-link"><span aria-hidden="true">&larr;</span> Back to Dashboard</a>
+    </nav>
+  </header>
+
+  <main id="main-content" class="form-container">
+    <div class="panel-card">
+      <h1 class="panel-title">Report an Infrastructure Issue</h1>
+      <p class="panel-subtitle">No account needed. Submit details below so barangay teams can respond. Fields marked with * are required.</p>
+
+      <div class="alert alert-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}" style="display: none;" th:style="'display: block;'"></div>
+      <div id="clientPhotoError" class="alert alert-error" role="alert" style="display: none;"></div>
+
+      <form action="index.html" th:action="@{/reports}" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+          <label class="form-label" for="title">Issue Title *</label>
+          <input class="form-control" type="text" id="title" name="title" maxlength="100" required placeholder="e.g., Clogged Storm Drain">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="category">Category *</label>
+          <select class="form-control" id="category" name="category" required>
+            <option value="" disabled selected>Select a category</option>
+            <option value="Sanitation">Sanitation</option>
+            <option value="Roadworks">Roadworks</option>
+            <option value="Electrical">Electrical</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="location">Street / Barangay Location *</label>
+          <input class="form-control" type="text" id="location" name="location" maxlength="150" required placeholder="e.g., A.S. Fortuna St., Banilad">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="description">Description *</label>
+          <textarea class="form-control" id="description" name="description" maxlength="500" required placeholder="Briefly describe the issue and any nearby landmarks..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="photo">Photo Evidence (Optional)</label>
+          <input class="form-control" type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/webp" aria-describedby="photoHint" onchange="checkPhoto()">
+          <div id="photoHint" class="form-hint">Accepted: JPEG, PNG, or WebP up to 5 MB. Leave blank if unavailable.</div>
+          <div id="photoPreviewBox" class="photo-preview-box">
+            <img id="photoPreviewImg" src="#" alt="Selected photo preview">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <a href="index.html" th:href="@{/}" class="btn-secondary">Cancel</a>
+          <button type="submit" class="btn-primary" style="flex: 1;">Submit Report</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    function checkPhoto() {
+      var photoInput = document.getElementById("photo");
+      var previewBox = document.getElementById("photoPreviewBox");
+      var previewImg = document.getElementById("photoPreviewImg");
+      var errorBox = document.getElementById("clientPhotoError");
+
+      errorBox.style.display = "none";
+      var file = photoInput.files[0];
+
+      if (!file) {
+        previewBox.style.display = "none";
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        errorBox.innerText = "Photo exceeds the 5 MB limit. Please select a smaller image.";
+        errorBox.style.display = "block";
+        photoInput.value = "";
+        previewBox.style.display = "none";
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        previewImg.src = e.target.result;
+        previewBox.style.display = "block";
+      };
+      reader.readAsDataURL(file);
+    }
+  </script>
+</body>
+</html>
