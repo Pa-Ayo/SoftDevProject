@@ -7,103 +7,145 @@
   <link rel="stylesheet" href="../static/css/style.css" th:href="@{/css/style.css}">
 </head>
 <body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" th:href="@{/}" class="brand-link">
+        <img src="../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
+        <div>
+          <p class="brand-title">Pa-Ayo</p>
+          <p class="brand-tagline">Atong komunidad. Atong responsibilidad.</p>
+        </div>
+      </a>
 
-  <a href="#main-content" class="skip-link">Skip to main content</a>
-
-  <header class="navbar">
-    <a href="index.html" th:href="@{/}" class="brand">
-      <img src="../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
-      <div>
-        <div class="brand-title">Pa-Ayo</div>
-        <div class="brand-tagline">Atong komunidad. Atong responsibilidad.</div>
-      </div>
-    </a>
-    <nav class="nav-actions" aria-label="Main navigation">
-      <a href="index.html" th:href="@{/}" class="nav-link"><span aria-hidden="true">&larr;</span> Back to Dashboard</a>
-    </nav>
+      <nav class="header-actions" aria-label="Primary Navigation">
+        <a href="index.html" th:href="@{/}" class="btn btn-link">&larr; Back to Dashboard</a>
+      </nav>
+    </div>
   </header>
 
-  <main id="main-content" class="form-container">
-    <div class="panel-card">
-      <h1 class="panel-title">Report an Infrastructure Issue</h1>
-      <p class="panel-subtitle">No account needed. Submit details below so barangay teams can respond. Fields marked with * are required.</p>
+  <main class="centered-page">
+    <section class="form-card" aria-labelledby="report-form-title">
+      <h1 id="report-form-title">Report an Infrastructure Issue</h1>
+      <p class="form-subtitle">
+        No account needed. Submit details below so barangay teams can respond. Fields marked with * are required.
+      </p>
 
-      <div class="alert alert-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}" style="display: none;" th:style="'display: block;'"></div>
-      <div id="clientPhotoError" class="alert alert-error" role="alert" style="display: none;"></div>
+      <div class="privacy-banner" role="note">
+        <strong>Prototype System:</strong> Do not enter sensitive personal information (names, phone numbers, or IDs).
+      </div>
 
-      <form action="index.html" th:action="@{/reports}" method="post" enctype="multipart/form-data">
+      <div th:if="${errorMessage != null}" class="alert alert-error" role="alert" th:text="${errorMessage}">
+        Please check the highlighted fields and try again.
+      </div>
+
+      <form method="post" th:action="@{/reports/new}" enctype="multipart/form-data" id="reportForm">
+        <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
         <div class="form-group">
-          <label class="form-label" for="title">Issue Title *</label>
-          <input class="form-control" type="text" id="title" name="title" maxlength="100" required placeholder="e.g., Clogged Storm Drain">
+          <label for="title">Issue Title *</label>
+          <input type="text"
+                 id="title"
+                 name="title"
+                 class="form-control"
+                 maxlength="100"
+                 required
+                 th:value="${report != null ? report.title : ''}"
+                 placeholder="e.g., Clogged Storm Drain">
+          <span class="field-hint">Maximum 100 characters.</span>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="category">Category *</label>
-          <select class="form-control" id="category" name="category" required>
+          <label for="category">Category *</label>
+          <select id="category" name="category" class="form-control" required>
             <option value="" disabled selected>Select a category</option>
-            <option value="Sanitation">Sanitation</option>
-            <option value="Roadworks">Roadworks</option>
-            <option value="Electrical">Electrical</option>
+            <option value="SANITATION" th:selected="${report != null and report.category != null and report.category.name() == 'SANITATION'}">Sanitation</option>
+            <option value="ROADWORKS" th:selected="${report != null and report.category != null and report.category.name() == 'ROADWORKS'}">Roadworks</option>
+            <option value="ELECTRICAL" th:selected="${report != null and report.category != null and report.category.name() == 'ELECTRICAL'}">Electrical</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="location">Street / Barangay Location *</label>
-          <input class="form-control" type="text" id="location" name="location" maxlength="150" required placeholder="e.g., A.S. Fortuna St., Banilad">
+          <label for="location">Street / Barangay Location *</label>
+          <input type="text"
+                 id="location"
+                 name="location"
+                 class="form-control"
+                 maxlength="200"
+                 required
+                 th:value="${report != null ? report.location : ''}"
+                 placeholder="e.g., A.S. Fortuna St., Banilad, Mandaue City">
+          <span class="field-hint">Maximum 200 characters. Include street name and barangay.</span>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="description">Description *</label>
-          <textarea class="form-control" id="description" name="description" maxlength="500" required placeholder="Briefly describe the issue and any nearby landmarks..."></textarea>
+          <label for="description">Description *</label>
+          <textarea id="description"
+                    name="description"
+                    class="form-control"
+                    maxlength="1000"
+                    required
+                    th:text="${report != null ? report.description : ''}"
+                    placeholder="Briefly describe the issue and any nearby landmarks..."></textarea>
+          <span class="field-hint">Maximum 1000 characters.</span>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="photo">Photo Evidence (Optional)</label>
-          <input class="form-control" type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/webp" aria-describedby="photoHint" onchange="checkPhoto()">
-          <div id="photoHint" class="form-hint">Accepted: JPEG, PNG, or WebP up to 5 MB. Leave blank if unavailable.</div>
+          <label for="photoFile">Attach Photo (Optional)</label>
+          <input type="file"
+                 id="photoFile"
+                 name="photoFile"
+                 class="form-control"
+                 accept="image/jpeg,image/png,image/webp">
+          <span class="field-hint">Accepted formats: JPEG, PNG, or WebP (max 5 MB). If omitted, a default placeholder is shown.</span>
+          <div id="photoError" class="alert alert-error" style="display:none; margin-top:0.6rem;" role="alert"></div>
           <div id="photoPreviewBox" class="photo-preview-box">
-            <img id="photoPreviewImg" src="#" alt="Selected photo preview">
+            <img id="photoPreviewImg" src="" alt="Selected report photo preview">
           </div>
         </div>
 
         <div class="form-actions">
-          <a href="index.html" th:href="@{/}" class="btn-secondary">Cancel</a>
-          <button type="submit" class="btn-primary" style="flex: 1;">Submit Report</button>
+          <a href="index.html" th:href="@{/}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">Submit Report</button>
         </div>
       </form>
-    </div>
+    </section>
   </main>
 
   <script>
-    function checkPhoto() {
-      var photoInput = document.getElementById("photo");
-      var previewBox = document.getElementById("photoPreviewBox");
-      var previewImg = document.getElementById("photoPreviewImg");
-      var errorBox = document.getElementById("clientPhotoError");
+    const photoInput = document.getElementById('photoFile');
+    const photoError = document.getElementById('photoError');
+    const previewBox = document.getElementById('photoPreviewBox');
+    const previewImg = document.getElementById('photoPreviewImg');
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const maxBytes = 5 * 1024 * 1024;
 
-      errorBox.style.display = "none";
-      var file = photoInput.files[0];
+    photoInput.addEventListener('change', function () {
+      photoError.style.display = 'none';
+      previewBox.style.display = 'none';
+      const file = this.files[0];
+      if (!file) return;
 
-      if (!file) {
-        previewBox.style.display = "none";
+      if (!allowedTypes.includes(file.type)) {
+        photoError.textContent = 'Unsupported file type. Please choose a JPEG, PNG, or WebP image.';
+        photoError.style.display = 'block';
+        this.value = '';
         return;
       }
 
-      if (file.size > 5 * 1024 * 1024) {
-        errorBox.innerText = "Photo exceeds the 5 MB limit. Please select a smaller image.";
-        errorBox.style.display = "block";
-        photoInput.value = "";
-        previewBox.style.display = "none";
+      if (file.size > maxBytes) {
+        photoError.textContent = 'Photo exceeds the 5 MB size limit. Please upload a smaller image.';
+        photoError.style.display = 'block';
+        this.value = '';
         return;
       }
 
-      var reader = new FileReader();
-      reader.onload = function(e) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
         previewImg.src = e.target.result;
-        previewBox.style.display = "block";
+        previewBox.style.display = 'block';
       };
       reader.readAsDataURL(file);
-    }
+    });
   </script>
 </body>
 </html>
