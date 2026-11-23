@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Control Dashboard | Pa-Ayo</title>
+  <link rel="stylesheet" href="../../static/css/style.css" th:href="@{/css/style.css}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="../index.html" th:href="@{/}" class="brand-link">
+        <img src="../../static/images/logo.png" th:src="@{/images/logo.png}" alt="Pa-Ayo Logo" class="brand-logo">
+        <div>
+          <p class="brand-title">Pa-Ayo Admin</p>
+          <p class="brand-tagline">Barangay &amp; LGU Issue Control</p>
+        </div>
+      </a>
+
+      <nav class="header-actions" aria-label="Admin Actions">
+        <a href="../index.html" th:href="@{/}" class="btn btn-link">View Public Site</a>
+        <form method="post" th:action="@{/admin/logout}" style="margin:0;">
+          <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <button type="submit" class="btn btn-secondary btn-sm">Sign Out</button>
+        </form>
+      </nav>
+    </div>
+  </header>
+
+  <main class="admin-container">
+    <div class="admin-toolbar">
+      <div>
+        <h1>Admin Control Dashboard</h1>
+        <p>Manage citizen reports and trigger government news updates.</p>
+      </div>
+
+      <form method="post" th:action="@{/admin/news/fetch}" style="margin:0;">
+        <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <button type="submit" class="btn btn-primary">&#x21bb; Fetch Latest News Now</button>
+      </form>
+    </div>
+
+    <div th:if="${statusMessage != null}" class="alert alert-success" role="status" th:text="${statusMessage}">
+      Status updated successfully.
+    </div>
+    <div th:if="${errorMessage != null}" class="alert alert-error" role="alert" th:text="${errorMessage}">
+      Action could not be completed. Please try again.
+    </div>
+
+    <section class="table-card" aria-label="Submitted Community Reports">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Category</th>
+            <th scope="col">Title &amp; Description</th>
+            <th scope="col">Location</th>
+            <th scope="col">Current Status</th>
+            <th scope="col">Update Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:if="${reports != null and #lists.isEmpty(reports)}">
+            <td colspan="6" style="text-align:center; padding:2rem; color:#475569;">
+              No citizen reports submitted yet.
+            </td>
+          </tr>
+
+          <tr th:each="report : ${reports}">
+            <td th:text="${report.createdAt != null ? #temporals.format(report.createdAt, 'MMM d, yyyy') : ''}">Nov 18, 2026</td>
+            <td>
+              <span class="badge"
+                    th:classappend="' badge-' + ${#strings.toLowerCase(report.category.name())}"
+                    th:text="${report.category.displayName}">Sanitation</span>
+            </td>
+            <td>
+              <div class="table-report-title" th:text="${report.title}">Clogged Storm Drain</div>
+              <div class="table-report-desc" th:text="${report.description}">Debris blocking the main storm drain.</div>
+            </td>
+            <td th:text="${report.location}">A.S. Fortuna St., Banilad</td>
+            <td>
+              <span class="badge"
+                    th:classappend="' badge-' + ${#strings.toLowerCase(report.status.name())}"
+                    th:text="${report.status.displayName}">Reported</span>
+            </td>
+            <td>
+              <form method="post" th:action="@{/admin/updateStatus}" class="status-update-form">
+                <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <input type="hidden" name="reportId" th:value="${report.reportId}">
+                <label th:for="'status-' + ${report.reportId}" class="sr-only">Select new status</label>
+                <select th:id="'status-' + ${report.reportId}" name="status" class="status-select">
+                  <option value="REPORTED" th:selected="${report.status.name() == 'REPORTED'}">Reported</option>
+                  <option value="IN_PROGRESS" th:selected="${report.status.name() == 'IN_PROGRESS'}">In Progress</option>
+                  <option value="RESOLVED" th:selected="${report.status.name() == 'RESOLVED'}">Resolved</option>
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+              </form>
+            </td>
+          </tr>
+
+          <!-- Static preview rows (automatically stripped by Thymeleaf at runtime) -->
+          <tr th:remove="all">
+            <td>Nov 18, 2026</td>
+            <td><span class="badge badge-sanitation">Sanitation</span></td>
+            <td>
+              <div class="table-report-title">Clogged Storm Drain</div>
+              <div class="table-report-desc">Debris blocking the main storm drain.</div>
+            </td>
+            <td>A.S. Fortuna St., Banilad</td>
+            <td><span class="badge badge-reported">Reported</span></td>
+            <td>
+              <form class="status-update-form">
+                <select class="status-select" aria-label="Status">
+                  <option selected>Reported</option>
+                  <option>In Progress</option>
+                  <option>Resolved</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm">Save</button>
+              </form>
+            </td>
+          </tr>
+
+          <tr th:remove="all">
+            <td>Nov 17, 2026</td>
+            <td><span class="badge badge-roadworks">Roadworks</span></td>
+            <td>
+              <div class="table-report-title">Deep Lane Pothole</div>
+              <div class="table-report-desc">Large pothole causing traffic hazard.</div>
+            </td>
+            <td>Subangdaku Highway</td>
+            <td><span class="badge badge-in_progress">In Progress</span></td>
+            <td>
+              <form class="status-update-form">
+                <select class="status-select" aria-label="Status">
+                  <option>Reported</option>
+                  <option selected>In Progress</option>
+                  <option>Resolved</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm">Save</button>
+              </form>
+            </td>
+          </tr>
+
+          <tr th:remove="all">
+            <td>Nov 17, 2026</td>
+            <td><span class="badge badge-electrical">Electrical</span></td>
+            <td>
+              <div class="table-report-title">Busted Corner Streetlamp</div>
+              <div class="table-report-desc">Dark corner needs replacement lamp.</div>
+            </td>
+            <td>P. Burgos St., Centro</td>
+            <td><span class="badge badge-resolved">Resolved</span></td>
+            <td>
+              <form class="status-update-form">
+                <select class="status-select" aria-label="Status">
+                  <option>Reported</option>
+                  <option>In Progress</option>
+                  <option selected>Resolved</option>
+                </select>
+                <button type="button" class="btn btn-primary btn-sm">Save</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
