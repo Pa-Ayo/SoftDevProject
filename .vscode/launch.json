@@ -1,0 +1,35 @@
+// File:        launch.json
+// Module:      Project setup
+// Purpose:     One-click run configurations for VS Code: the real database, the local one, and sample data.
+// Responsible: Felix Joshua H. Abing
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Pa-Ayo (local test database)",
+      "type": "java",
+      "request": "launch",
+      "mainClass": "com.paayo.PaAyoApplication",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Start local database"
+    },
+    {
+      "name": "Pa-Ayo (local, with sample reports)",
+      "type": "java",
+      "request": "launch",
+      "mainClass": "com.paayo.PaAyoApplication",
+      "cwd": "${workspaceFolder}",
+      "vmArgs": "-Dspring.profiles.active=seed",
+      "preLaunchTask": "Start local database"
+    }
+    // Real data is switched off while the team works locally. To go live, remove the // below.
+    //,{
+    //  "name": "Pa-Ayo (real data)",
+    //  "type": "java",
+    //  "request": "launch",
+    //  "mainClass": "com.paayo.PaAyoApplication",
+    //  "cwd": "${workspaceFolder}",
+    //  "vmArgs": "-Dpa-ayo.firebase.emulator-host= -Dpa-ayo.firebase.credentials-path=secrets/firebase-service-account.json"
+    //}
+  ]
+}

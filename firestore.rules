@@ -1,0 +1,12 @@
+// File:        firestore.rules
+// Module:      Database
+// Purpose:     Denies all direct client access. Only the server-side Admin SDK reaches Firestore.
+// Responsible: Felix Joshua H. Abing
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

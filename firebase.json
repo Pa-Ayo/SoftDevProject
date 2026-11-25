@@ -1,0 +1,17 @@
+// File:        firebase.json
+// Module:      Database
+// Purpose:     Firebase CLI settings: free Standard database in Singapore, rules, indexes and the local emulator.
+// Responsible: Felix Joshua H. Abing
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-southeast1",
+    "edition": "standard",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "emulators": {
+    "firestore": { "host": "127.0.0.1", "port": 8085 },
+    "ui": { "enabled": true, "port": 4000 }
+  }
+}
