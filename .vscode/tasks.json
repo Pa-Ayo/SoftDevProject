@@ -1,0 +1,23 @@
+// File:        tasks.json
+// Module:      Project setup
+// Purpose:     Starts the local Firestore emulator for the local run configurations.
+// Responsible: Felix Joshua H. Abing
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start local database",
+      "type": "shell",
+      "command": "npx -y firebase-tools@15 emulators:start --only firestore --project demo-pa-ayo",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^(Error): (.*)$", "file": 1, "message": 2 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Starting emulators",
+          "endsPattern": "All emulators ready"
+        }
+      }
+    }
+  ]
+}

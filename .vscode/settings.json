@@ -1,0 +1,16 @@
+// File:        settings.json
+// Module:      Project setup
+// Purpose:     Pins VS Code and its terminal to JDK 21 on macOS.
+// Responsible: Felix Joshua H. Abing
+{
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-21",
+      "path": "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
+      "default": true
+    }
+  ],
+  "terminal.integrated.env.osx": {
+    "JAVA_HOME": "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home"
+  }
+}

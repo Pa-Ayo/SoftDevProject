@@ -1,0 +1,30 @@
+# File:        .gitignore
+# Module:      Project setup
+# Purpose:     Keeps secrets, build output and editor files out of Git.
+# Responsible: Felix Joshua H. Abing
+
+# Secrets (NFR-08): never commit real credentials
+.env
+*.env
+!.env.example
+secrets/
+*service-account*.json
+*firebase-adminsdk*.json
+
+# Build output
+target/
+
+# Firebase emulator
+.firebase/
+*-debug.log
+emulator-data/
+
+# macOS and editors
+.DS_Store
+.idea/
+*.iml
+.settings/
+.classpath
+.project
+.factorypath
+bin/
