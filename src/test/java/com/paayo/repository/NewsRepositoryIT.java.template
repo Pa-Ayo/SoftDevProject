@@ -1,0 +1,57 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once NewsRepository and NewsItem exist.
+ * Runs on the Firestore emulator: mvn verify -Pintegration
+ * Covers: TC-08 (no duplicates, database side). Requirements: FR-07, NFR-11.
+ */
+package com.paayo.repository;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.paayo.model.NewsItem;
+import com.paayo.support.AbstractFirestoreIT;
+import com.paayo.util.FirestoreTypes;
+import java.time.LocalDate;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+class NewsRepositoryIT extends AbstractFirestoreIT {
+    @Autowired
+    private NewsRepository repository;
+
+    private NewsItem item(String url, LocalDate date) {
+        NewsItem n = new NewsItem();
+        n.setTitle("Advisory for " + url);
+        n.setSummary("Short summary");
+        n.setSourceName("Province of Cebu");
+        n.setSourceUrl(url);
+        n.setPublishedDate(date);
+        n.setFetchedAt(FirestoreTypes.now());
+        return n;
+    }
+
+    @Test
+    @Tag("TC-08")
+    @DisplayName("TC-08 existsBySourceUrl is false before saving and true after")
+    void tc08_existsBySourceUrl() {
+        assertThat(repository.existsBySourceUrl("https://example.gov.ph/a")).isFalse();
+
+        repository.save(item("https://example.gov.ph/a", LocalDate.of(2026, 11, 20)));
+
+        assertThat(repository.existsBySourceUrl("https://example.gov.ph/a")).isTrue();
+        assertThat(repository.existsBySourceUrl("https://example.gov.ph/other")).isFalse();
+    }
+
+    @Test
+    @Tag("TC-07")
+    @DisplayName("TC-07 findLatest returns the newest items first and respects the limit")
+    void tc07_findLatest() {
+        repository.save(item("https://example.gov.ph/old", LocalDate.of(2026, 11, 1)));
+        repository.save(item("https://example.gov.ph/mid", LocalDate.of(2026, 11, 10)));
+        repository.save(item("https://example.gov.ph/new", LocalDate.of(2026, 11, 20)));
+
+        assertThat(repository.findLatest(2)).extracting(NewsItem::getSourceUrl)
+                .containsExactly("https://example.gov.ph/new", "https://example.gov.ph/mid");
+    }
+}

@@ -1,0 +1,69 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once TextParaphraser exists,
+ * then fix the lines marked TODO. Covers: TC-11. Requirement: FR-07 (summary <= 300 chars).
+ */
+package com.paayo.newsbot;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+@Tag("TC-11")
+class TextParaphraserTest {
+    private static final int MAX = 300;
+    private TextParaphraser paraphraser;
+
+    @BeforeEach
+    void setUp() {
+        paraphraser = new TextParaphraser(MAX);   // TODO: match the real constructor
+    }
+
+    @ParameterizedTest(name = "TC-11 null/blank input gives an empty string: [{0}]")
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\n\t "})
+    void blankGivesEmptyString(String input) {
+        assertThat(paraphraser.paraphrase(input)).isEqualTo("");
+    }
+
+    @Test
+    @DisplayName("TC-11 short text is kept as is")
+    void shortTextIsKept() {
+        String text = "Road works start Monday.";
+
+        assertThat(paraphraser.paraphrase(text)).isEqualTo(text);
+    }
+
+    @Test
+    @DisplayName("TC-11 long text never exceeds the maximum length")
+    void longTextNeverExceedsMax() {
+        String text = "The road will be closed for repairs. ".repeat(60);
+
+        assertThat(paraphraser.paraphrase(text).length()).isLessThanOrEqualTo(MAX);
+    }
+
+    @Test
+    @DisplayName("TC-11 a single very long sentence is cut at a word boundary, never mid-word")
+    void singleVeryLongSentenceIsCutAtAWord() {
+        String text = "construction ".repeat(100).trim();
+
+        String result = paraphraser.paraphrase(text);
+
+        assertThat(result.length()).isLessThanOrEqualTo(MAX);
+        // every word left in the summary is a whole word (allow a trailing "..." if the code adds one)
+        assertThat(result.replaceAll("[.…\\s]+$", "").split("\\s+")).allMatch("construction"::equals);
+    }
+
+    @Test
+    @DisplayName("TC-11 the same input always gives the same summary (deterministic)")
+    void sameInputSameOutput() {
+        String text = "Drainage declogging begins. Residents should not throw garbage. ".repeat(12);
+
+        assertThat(paraphraser.paraphrase(text)).isEqualTo(paraphraser.paraphrase(text));
+    }
+}

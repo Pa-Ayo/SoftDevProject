@@ -1,0 +1,244 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once the report form (S2), ReportController
+ * and ImageStorageService exist. Needs the Firestore emulator + Chromium: mvn verify -Pintegration
+ * Cloudinary is never called: storePhoto is stubbed, the real validatePhoto still runs (NFR-15).
+ * Covers: TC-01, TC-02, TC-03, TC-14 (XSS, CSRF), TC-16 (a)(b)(c).
+ * Requirements: FR-01, FR-08, FR-12, NFR-09.
+ */
+package com.paayo.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
+
+import com.google.cloud.firestore.Firestore;
+import com.microsoft.playwright.APIResponse;
+import com.microsoft.playwright.options.FilePayload;
+import com.microsoft.playwright.options.FormData;
+import com.microsoft.playwright.options.RequestOptions;
+import com.paayo.service.ImageStorageService;
+import com.paayo.support.AbstractE2EIT;
+import com.paayo.support.SeedData;
+import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+class ReportFormE2EIT extends AbstractE2EIT {
+    @Autowired
+    private Firestore firestore;
+    @MockitoSpyBean
+    private ImageStorageService imageStorageService;
+
+    @BeforeEach
+    void stubCloudinary() throws Exception {
+        doReturn(SeedData.PHOTO).when(imageStorageService).storePhoto(any());
+    }
+
+    private void openForm() {
+        page.navigate(baseUrl() + "/reports/new");
+        page.waitForSelector("#reportForm");
+    }
+
+    private void fill(String title, String location, String description) {
+        page.fill("#title", title);
+        page.selectOption("#category", "SANITATION");
+        page.fill("#location", location);
+        page.fill("#description", description);
+    }
+
+    private void submit() {
+        page.click("button:has-text('Submit Report')");
+    }
+
+    /** Turns off the browser's own checks so the SERVER-side validation is what gets tested. */
+    private void disableBrowserValidation() {
+        page.evaluate("document.getElementById('reportForm').noValidate = true;"
+                + "['title','location','description'].forEach(id => document.getElementById(id).removeAttribute('maxlength'));");
+    }
+
+    private int storedReports() throws Exception {
+        return firestore.collection("reports").get().get().size();
+    }
+
+    // ---------------------------------------------------------------- TC-01 / TC-16(b)
+    @Test
+    @Tag("TC-01")
+    @Tag("TC-16")
+    @DisplayName("TC-01 / TC-16(b) valid report without photo: back on /, newest card, default placeholder")
+    void tc01_submitWithoutPhoto() throws Exception {
+        openForm();
+        fill("Clogged storm drain", "A.S. Fortuna St., Banilad", "Debris blocks the drain.");
+        submit();
+
+        page.waitForURL(baseUrl() + "/");
+        assertThat(page.locator(".report-card .card-title").first().innerText()).isEqualTo("Clogged storm drain");
+        assertThat(page.locator(".report-card").first().locator("img").count()).isZero();   // placeholder, no photo
+        assertThat(storedReports()).isEqualTo(1);
+    }
+
+    // ---------------------------------------------------------------- TC-02
+    @Test
+    @Tag("TC-02")
+    @DisplayName("TC-02 empty title, location and description: inline error and nothing saved")
+    void tc02_emptyFields() throws Exception {
+        openForm();
+        disableBrowserValidation();
+        submit();
+
+        page.locator(".alert-error").first().waitFor();
+        assertThat(storedReports()).isZero();
+    }
+
+    // ---------------------------------------------------------------- TC-03
+    private void attemptAndExpectRejection(String title, String location, String description) throws Exception {
+        openForm();
+        disableBrowserValidation();
+        fill(title, location, description);
+        submit();
+
+        page.locator(".alert-error").first().waitFor();
+        assertThat(storedReports()).isZero();
+    }
+
+    @Test
+    @Tag("TC-03")
+    @DisplayName("TC-03 whitespace-only fields are rejected")
+    void tc03_whitespaceOnly() throws Exception {
+        attemptAndExpectRejection("   ", "   ", "   ");
+    }
+
+    @Test
+    @Tag("TC-03")
+    @DisplayName("TC-03 101-character title is rejected")
+    void tc03_titleTooLong() throws Exception {
+        attemptAndExpectRejection("t".repeat(101), "Banilad", "Description");
+    }
+
+    @Test
+    @Tag("TC-03")
+    @DisplayName("TC-03 201-character location is rejected")
+    void tc03_locationTooLong() throws Exception {
+        attemptAndExpectRejection("Title", "l".repeat(201), "Description");
+    }
+
+    @Test
+    @Tag("TC-03")
+    @DisplayName("TC-03 1001-character description is rejected")
+    void tc03_descriptionTooLong() throws Exception {
+        attemptAndExpectRejection("Title", "Banilad", "d".repeat(1001));
+    }
+
+    // ---------------------------------------------------------------- TC-14
+    @Test
+    @Tag("TC-14")
+    @DisplayName("TC-14 <script>alert(1)</script> in the title is shown as text and never runs")
+    void tc14_scriptIsNotExecuted() throws Exception {
+        AtomicBoolean dialogShown = new AtomicBoolean(false);
+        page.onDialog(dialog -> {
+            dialogShown.set(true);
+            dialog.dismiss();
+        });
+
+        openForm();
+        fill("<script>alert(1)</script>", "Banilad", "Description");
+        submit();
+        page.waitForURL(baseUrl() + "/");
+
+        assertThat(page.locator(".report-card .card-title").first().innerText()).isEqualTo("<script>alert(1)</script>");
+        assertThat(page.content()).doesNotContain("<script>alert(1)</script>");
+        assertThat(dialogShown).isFalse();
+    }
+
+    @Test
+    @Tag("TC-14")
+    @DisplayName("TC-14 a POST without a CSRF token is rejected (403) and nothing is saved")
+    void tc14_postWithoutCsrfToken() throws Exception {
+        APIResponse response = page.request().post(baseUrl() + "/reports/new",
+                RequestOptions.create().setForm(FormData.create()
+                        .set("title", "x").set("category", "SANITATION")
+                        .set("location", "y").set("description", "z")));
+
+        assertThat(response.status()).isEqualTo(403);
+        assertThat(storedReports()).isZero();
+    }
+
+    @Test
+    @Tag("TC-14")
+    @DisplayName("TC-14 the privacy notice is visible on the form")
+    void tc14_privacyNotice() {
+        openForm();
+
+        assertThat(page.locator(".privacy-banner").innerText()).contains("Do not enter sensitive personal information");
+    }
+
+    // ---------------------------------------------------------------- TC-16(a)
+    @Test
+    @Tag("TC-16")
+    @DisplayName("TC-16(a) valid JPEG: the report card shows the photo")
+    void tc16a_validPhoto(@TempDir Path tmp) throws Exception {
+        Path jpeg = tmp.resolve("drain.jpg");
+        ImageIO.write(new BufferedImage(200, 150, BufferedImage.TYPE_INT_RGB), "jpg", jpeg.toFile());
+
+        openForm();
+        fill("Report with photo", "Banilad", "Description");
+        page.setInputFiles("#photoFile", jpeg);
+        submit();
+
+        page.waitForURL(baseUrl() + "/");
+        assertThat(page.locator(".report-card").first().locator("img").count()).isEqualTo(1);
+        verify(imageStorageService).storePhoto(any());
+    }
+
+    // ---------------------------------------------------------------- TC-16(c)
+    /** Posts the form like a browser would, but skipping the page's own JavaScript checks. */
+    private APIResponse postWithPhoto(String fileName, String mimeType, byte[] bytes) {
+        openForm();
+        String csrf = page.inputValue("input[name=_csrf]");
+        return page.request().post(baseUrl() + "/reports/new", RequestOptions.create().setMultipart(
+                FormData.create().set("_csrf", csrf).set("title", "With bad photo").set("category", "SANITATION")
+                        .set("location", "Banilad").set("description", "Description")
+                        .set("photoFile", new FilePayload(fileName, mimeType, bytes))));
+    }
+
+    @Test
+    @Tag("TC-16")
+    @DisplayName("TC-16(c) a PDF is rejected by the server and nothing is saved")
+    void tc16c_pdfRejected() throws Exception {
+        APIResponse response = postWithPhoto("notes.pdf", "application/pdf", "%PDF-1.4".getBytes());
+
+        assertThat(response.status()).isLessThan(500);
+        assertThat(storedReports()).isZero();
+    }
+
+    @Test
+    @Tag("TC-16")
+    @DisplayName("TC-16(c) a 6 MB image is rejected by the server and nothing is saved")
+    void tc16c_sixMegabyteImageRejected() throws Exception {
+        APIResponse response = postWithPhoto("big.jpg", "image/jpeg", new byte[6 * 1024 * 1024]);
+
+        assertThat(response.status()).isLessThan(500);
+        assertThat(storedReports()).isZero();
+    }
+
+    @Test
+    @Tag("TC-16")
+    @DisplayName("TC-16(c) choosing a PDF in the browser shows a photo error")
+    void tc16c_browserWarnsAboutPdf(@TempDir Path tmp) throws Exception {
+        Path pdf = Files.write(tmp.resolve("notes.pdf"), "%PDF-1.4".getBytes());
+
+        openForm();
+        page.setInputFiles("#photoFile", pdf);
+
+        page.locator("#photoError").waitFor();   // visible = the page's own check noticed it
+    }
+}

@@ -1,0 +1,195 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once the admin screens (S3, S3b, S4),
+ * AdminController, AdminAuthService and the security configuration exist. Needs the Firestore emulator + Chromium.
+ * The reset email is mocked: the test reads the token from the message the app tried to send.
+ * Covers: TC-05, TC-06, TC-17 (a)(b)(c). Requirements: FR-05, FR-13, NFR-06, NFR-07.
+ */
+package com.paayo.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.google.cloud.Timestamp;
+import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.Firestore;
+import com.paayo.support.AbstractE2EIT;
+import com.paayo.support.SeedData;
+import com.paayo.util.FirestoreTypes;
+import java.time.LocalDateTime;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+class AdminFlowE2EIT extends AbstractE2EIT {
+    private static final String USER = "qa-admin";
+    private static final String EMAIL = "qa-admin@example.com";
+    private static final String PASSWORD = "Str0ng-Passw0rd";
+    private static final String NEW_PASSWORD = "N3w-Passw0rd!";
+
+    @Autowired
+    private Firestore firestore;
+    @MockitoBean
+    private JavaMailSender mailSender;   // TODO: the reset mail is read as a SimpleMailMessage; adapt if the code sends MIME
+
+    @BeforeEach
+    void seedAdmin() throws Exception {
+        SeedData.admin(firestore, USER, EMAIL, PASSWORD);
+    }
+
+    private void login(String user, String password) {
+        page.navigate(baseUrl() + "/admin/login");
+        page.fill("#username", user);
+        page.fill("#password", password);
+        page.click("button:has-text('Sign In')");
+    }
+
+    // ---------------------------------------------------------------- TC-06
+    @Test
+    @Tag("TC-06")
+    @DisplayName("TC-06 visiting /admin/dashboard without logging in lands on the login page")
+    void tc06_dashboardRedirectsToLogin() {
+        page.navigate(baseUrl() + "/admin/dashboard");
+
+        page.waitForURL(url -> url.contains("/admin/login"));
+    }
+
+    @Test
+    @Tag("TC-06")
+    @DisplayName("TC-06 wrong password: generic error, and the dashboard stays locked")
+    void tc06_wrongPassword() {
+        login(USER, "wrong-password");
+
+        page.locator(".alert-error").waitFor();
+        assertThat(page.url()).contains("/admin/login");
+        page.navigate(baseUrl() + "/admin/dashboard");
+        page.waitForURL(url -> url.contains("/admin/login"));
+    }
+
+    // ---------------------------------------------------------------- TC-05
+    @Test
+    @Tag("TC-05")
+    @DisplayName("TC-05 admin moves a report Reported -> In Progress -> Resolved; public badge follows; createdAt unchanged")
+    void tc05_statusFlow() throws Exception {
+        LocalDateTime created = FirestoreTypes.now().minusDays(1);
+        SeedData.report(firestore, "tc05", "Status test report", "ROADWORKS", "REPORTED", null, created);
+
+        login(USER, PASSWORD);
+        page.waitForURL(url -> url.contains("/admin/dashboard"));
+
+        for (String[] step : new String[][] {{"IN_PROGRESS", "In Progress"}, {"RESOLVED", "Resolved"}}) {
+            page.navigate(baseUrl() + "/admin/dashboard");
+            page.selectOption("#status-tc05", step[0]);
+            page.click("form:has(#status-tc05) button:has-text('Save')");
+            page.locator(".alert-success").waitFor();
+
+            page.navigate(baseUrl() + "/");
+            assertThat(page.locator(".report-card").first().innerText()).contains(step[1]);
+        }
+
+        DocumentSnapshot doc = firestore.collection("reports").document("tc05").get().get();
+        assertThat(doc.getString("status")).isEqualTo("RESOLVED");
+        assertThat(doc.getTimestamp("createdAt")).isEqualTo(FirestoreTypes.toTimestamp(created));
+        assertThat(doc.getTimestamp("updatedAt")).isGreaterThan(doc.getTimestamp("createdAt"));
+    }
+
+    // ---------------------------------------------------------------- TC-17
+    private void requestReset(String identifier) {
+        page.navigate(baseUrl() + "/admin/forgot-password");
+        page.fill("#identifier", identifier);
+        page.click("button:has-text('Send Reset Link')");
+        page.locator(".alert-info").waitFor();
+    }
+
+    /** Reads the raw token from the last reset email the app tried to send. */
+    private String lastEmailedToken() {
+        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender, atLeastOnce()).send(mail.capture());
+        String text = mail.getAllValues().get(mail.getAllValues().size() - 1).getText();
+        Matcher m = Pattern.compile("token=([^\\s&]+)").matcher(text);
+        assertThat(m.find()).as("reset link in the email").isTrue();
+        return m.group(1);
+    }
+
+    private void openResetLink(String token) {
+        // The emailed link uses pa-ayo.base-url; the test server runs on a random port, so only the token is used.
+        page.navigate(baseUrl() + "/admin/reset-password?token=" + token);
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(a) a registered and an unknown username get the identical notice; only the real one is emailed")
+    void tc17a_genericNotice() {
+        requestReset(USER);
+        String realNotice = page.locator(".alert-info").innerText();
+        requestReset("nobody");
+        String unknownNotice = page.locator(".alert-info").innerText();
+
+        assertThat(unknownNotice).isEqualTo(realNotice);
+        verify(mailSender).send(org.mockito.ArgumentMatchers.any(SimpleMailMessage.class));   // exactly one email
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(b) reset link sets a new password: new one logs in, old one does not")
+    void tc17b_resetPassword() {
+        requestReset(USER);
+        openResetLink(lastEmailedToken());
+
+        page.fill("#newPassword", NEW_PASSWORD);
+        page.fill("#confirmPassword", NEW_PASSWORD);
+        page.click("button:has-text('Reset Password')");
+        page.waitForURL(url -> url.contains("/admin/login"));
+
+        login(USER, NEW_PASSWORD);
+        page.waitForURL(url -> url.contains("/admin/dashboard"));
+
+        context.clearCookies();
+        login(USER, PASSWORD);
+        page.locator(".alert-error").waitFor();
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(c) a used reset link no longer works")
+    void tc17c_linkIsSingleUse() {
+        requestReset(USER);
+        String token = lastEmailedToken();
+        openResetLink(token);
+        page.fill("#newPassword", NEW_PASSWORD);
+        page.fill("#confirmPassword", NEW_PASSWORD);
+        page.click("button:has-text('Reset Password')");
+        page.waitForURL(url -> url.contains("/admin/login"));
+
+        openResetLink(token);
+
+        assertThat(page.locator("#resetPasswordForm").count()).isZero();   // the form is not offered again
+        page.locator(".alert-error").first().waitFor();
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(c) a reset link older than 30 minutes no longer works")
+    void tc17c_linkExpires() throws Exception {
+        requestReset(USER);
+        String token = lastEmailedToken();
+        DocumentSnapshot admin = firestore.collection("admins").whereEqualTo("username", USER)
+                .get().get().getDocuments().get(0);
+        Timestamp expired = FirestoreTypes.toTimestamp(FirestoreTypes.now().minusMinutes(1));
+        admin.getReference().update("resetTokenExpiresAt", expired).get();
+
+        openResetLink(token);
+
+        assertThat(page.locator("#resetPasswordForm").count()).isZero();
+        page.locator(".alert-error").first().waitFor();
+    }
+}

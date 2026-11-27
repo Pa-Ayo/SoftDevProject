@@ -1,0 +1,147 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once NewsScraper exists,
+ * then fix the lines marked TODO (constructor and what the real selectors accept).
+ * Parsing tests use the saved pages in src/test/resources/fixtures/news (offline, NFR-15).
+ * The network tests talk to a tiny local server, never to the real government sites.
+ * Covers: TC-07 (parsing), TC-09, TC-10. Requirements: FR-06, NFR-03, NFR-14, NFR-15.
+ */
+package com.paayo.newsbot;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+import com.paayo.model.NewsItem;
+import com.paayo.support.Fixtures;
+import com.paayo.util.FirestoreTypes;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+class NewsScraperTest {
+    private static final String USER_AGENT = "PaAyoNewsBot/1.0 (test)";
+    private HttpServer server;
+
+    @AfterEach
+    void stopServer() {
+        if (server != null) {
+            server.stop(0);
+        }
+    }
+
+    private NewsScraper scraper(List<String> urls, int timeoutMs) {
+        return new NewsScraper(urls, USER_AGENT, timeoutMs);   // TODO: match the real constructor
+    }
+
+    // ---------------------------------------------------------------- parsing (offline fixtures)
+    @Test
+    @Tag("TC-07")
+    @DisplayName("TC-07 listing page: items have title, summary, absolute source link and thumbnail URL")
+    void tc07_parsesListingFixture() {
+        List<NewsItem> items = scraper(List.of(), 10_000)
+                .parseArticles(Fixtures.document("news/listing-with-articles.html"));
+
+        assertThat(items).isNotEmpty();   // TODO: if keyword filtering drops the "office schedule" item, expect 2
+        NewsItem first = items.get(0);
+        assertThat(first.getTitle()).containsIgnoringCase("road rehabilitation");
+        assertThat(first.getSummary()).isNotBlank();
+        assertThat(first.getSourceUrl()).isEqualTo("https://www.cebu.gov.ph/news/road-rehabilitation-advisory/");
+        assertThat(first.getImageUrl()).isEqualTo("https://www.cebu.gov.ph/uploads/2026/11/road-works.jpg");
+        assertThat(first.getPublishedDate()).isEqualTo(LocalDate.of(2026, 11, 20));
+    }
+
+    @Test
+    @Tag("TC-09")
+    @DisplayName("TC-09 no date element and no thumbnail: no exception, date = today (Manila), imageUrl = null")
+    void tc09_missingDateAndThumbnail() {
+        List<NewsItem> items = scraper(List.of(), 10_000)
+                .parseArticles(Fixtures.document("news/article-no-date-no-thumbnail.html"));
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getPublishedDate()).isEqualTo(FirestoreTypes.today());
+        assertThat(items.get(0).getImageUrl()).isNull();
+    }
+
+    @Test
+    @Tag("TC-10")
+    @DisplayName("TC-10 changed layout: returns an empty list instead of crashing")
+    void tc10_changedLayoutGivesEmptyList() {
+        assertThatCode(() -> {
+            List<NewsItem> items = scraper(List.of(), 10_000)
+                    .parseArticles(Fixtures.document("news/changed-layout.html"));
+            assertThat(items).isEmpty();
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    @Tag("TC-10")
+    @DisplayName("TC-10 a page with no results gives an empty list")
+    void tc10_emptyListing() {
+        assertThat(scraper(List.of(), 10_000).parseArticles(Fixtures.document("news/empty-listing.html"))).isEmpty();
+    }
+
+    // ---------------------------------------------------------------- network failures (local server)
+    private String startServer() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/good", ex -> respond(ex, 200, Fixtures.read("news/listing-with-articles.html")));
+        server.createContext("/error", ex -> respond(ex, 500, "boom"));
+        server.createContext("/slow", ex -> {
+            try {
+                Thread.sleep(3_000);   // longer than the 500 ms timeout used below
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            respond(ex, 200, "<html></html>");
+        });
+        server.start();
+        return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    private static void respond(HttpExchange ex, int status, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
+        ex.sendResponseHeaders(status, bytes.length);
+        try (OutputStream out = ex.getResponseBody()) {
+            out.write(bytes);
+        }
+    }
+
+    @Test
+    @Tag("TC-10")
+    @Tag("NFR-03")
+    @DisplayName("TC-10 unreachable, timed-out and HTTP 500 sources are skipped; the good source is still processed")
+    void tc10_badSourcesDoNotStopTheGoodOne() throws IOException {
+        String base = startServer();
+        NewsScraper scraper = scraper(List.of(
+                "http://127.0.0.1:1/",      // nothing listens here: connection refused
+                base + "/slow",             // exceeds the timeout
+                base + "/error",            // HTTP 500
+                base + "/good"), 500);
+
+        long start = System.nanoTime();
+        List<NewsItem> items = scraper.scrape();
+        Duration took = Duration.ofNanos(System.nanoTime() - start);
+
+        assertThat(items).isNotEmpty();                       // the /good page still produced news
+        assertThat(took).isLessThan(Duration.ofSeconds(10));  // the 3 s slow page did not hang the bot
+    }
+
+    @Test
+    @Tag("TC-10")
+    @DisplayName("TC-10 when every source fails, scrape() returns an empty list without throwing")
+    void tc10_allSourcesFail() throws IOException {
+        String base = startServer();
+        NewsScraper scraper = scraper(List.of("http://127.0.0.1:1/", base + "/error"), 500);
+
+        assertThatCode(() -> assertThat(scraper.scrape()).isEmpty()).doesNotThrowAnyException();
+    }
+}

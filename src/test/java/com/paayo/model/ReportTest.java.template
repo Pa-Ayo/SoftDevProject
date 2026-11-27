@@ -1,0 +1,77 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once the Report model exists,
+ * then fix the lines marked TODO (package names, constructors).
+ * Covers: TC-05 (createdAt unchanged, updatedAt changes), TC-02/TC-03 (isValid boundaries).
+ * Requirements: FR-05, FR-08.
+ */
+package com.paayo.model;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.paayo.util.FirestoreTypes;
+import java.time.LocalDateTime;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+class ReportTest {
+
+    private Report valid() {
+        Report r = new Report();
+        r.setTitle("Clogged storm drain");
+        r.setCategory(Category.SANITATION);
+        r.setLocation("A.S. Fortuna St., Banilad");
+        r.setDescription("Debris blocks the main drain.");
+        return r;
+    }
+
+    @Test
+    @Tag("TC-05")
+    @DisplayName("TC-05 updateStatus changes status and updatedAt but never createdAt")
+    void tc05_updateStatusKeepsCreatedAt() {
+        Report r = valid();
+        LocalDateTime yesterday = FirestoreTypes.now().minusDays(1);
+        r.setStatus(ReportStatus.REPORTED);
+        r.setCreatedAt(yesterday);
+        r.setUpdatedAt(yesterday);
+
+        r.updateStatus(ReportStatus.IN_PROGRESS);
+        assertThat(r.getStatus()).isEqualTo(ReportStatus.IN_PROGRESS);
+        assertThat(r.getCreatedAt()).isEqualTo(yesterday);
+        assertThat(r.getUpdatedAt()).isAfter(yesterday);
+
+        r.updateStatus(ReportStatus.RESOLVED);
+        assertThat(r.getStatus()).isEqualTo(ReportStatus.RESOLVED);
+        assertThat(r.getCreatedAt()).isEqualTo(yesterday);
+    }
+
+    @Test
+    @Tag("TC-02")
+    @DisplayName("TC-02 a report with all required fields is valid")
+    void tc02_validReport() {
+        assertThat(valid().isValid()).isTrue();
+    }
+
+    @Test
+    @Tag("TC-03")
+    @DisplayName("TC-03 limits: 100/200/1000 characters are valid, one more is not")
+    void tc03_lengthBoundaries() {
+        Report atLimit = valid();
+        atLimit.setTitle("t".repeat(100));
+        atLimit.setLocation("l".repeat(200));
+        atLimit.setDescription("d".repeat(1000));
+        assertThat(atLimit.isValid()).isTrue();
+
+        Report longTitle = valid();
+        longTitle.setTitle("t".repeat(101));
+        assertThat(longTitle.isValid()).isFalse();
+
+        Report longLocation = valid();
+        longLocation.setLocation("l".repeat(201));
+        assertThat(longLocation.isValid()).isFalse();
+
+        Report longDescription = valid();
+        longDescription.setDescription("d".repeat(1001));
+        assertThat(longDescription.isValid()).isFalse();
+    }
+}

@@ -1,0 +1,124 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once the public dashboard (S1) is served by
+ * the controllers. Needs the Firestore emulator + Chromium: mvn verify -Pintegration
+ * Covers: TC-12 (30 reports, 4/2/1 columns, mixed photo/placeholder cards), TC-04 (filter pills), TC-01 (newest first).
+ * Requirements: FR-03, FR-04, FR-09, NFR-04.
+ */
+package com.paayo.e2e;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.google.cloud.firestore.Firestore;
+import com.paayo.support.AbstractE2EIT;
+import com.paayo.support.SeedData;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+class GridE2EIT extends AbstractE2EIT {
+    @Autowired
+    private Firestore firestore;
+
+    @BeforeEach
+    void seed() throws Exception {
+        SeedData.thirtyReports(firestore);   // runs after the base class has emptied the database
+    }
+
+    private void openDashboard() {
+        page.navigate(baseUrl() + "/");
+        page.waitForSelector(".report-card");
+    }
+
+    /** Number of CSS grid columns of the report grid. */
+    private int columns() {
+        Object n = page.evaluate("getComputedStyle(document.querySelector('.report-grid'))"
+                + ".gridTemplateColumns.split(' ').length");
+        return ((Number) n).intValue();
+    }
+
+    private long distinctValues(String script) {
+        Object result = page.locator(".report-card").evaluateAll(script);
+        return ((List<?>) result).stream().map(o -> ((Number) o).intValue()).distinct().count();
+    }
+
+    @Test
+    @Tag("TC-12")
+    @DisplayName("TC-12 desktop: all 30 reports are shown in a 4-column grid with equal-width cards")
+    void tc12_desktopFourColumns() {
+        useViewport(DESKTOP);
+        openDashboard();
+
+        assertThat(page.locator(".report-card").count()).isGreaterThanOrEqualTo(30);
+        assertThat(columns()).isEqualTo(4);
+        assertThat(distinctValues("els => els.map(e => Math.round(e.getBoundingClientRect().width))")).isEqualTo(1);
+        assertThat(distinctValues("els => els.map(e => Math.round(e.querySelector('.card-media').getBoundingClientRect().height))"))
+                .as("photo and placeholder cards have the same media height").isEqualTo(1);
+    }
+
+    @Test
+    @Tag("TC-12")
+    @DisplayName("TC-12 tablet (1024 px) shows 2 columns")
+    void tc12_tabletTwoColumns() {
+        useViewport(TABLET);
+        openDashboard();
+
+        assertThat(columns()).isEqualTo(2);
+    }
+
+    @Test
+    @Tag("TC-12")
+    @DisplayName("TC-12 mobile (375 px) shows 1 column and nothing forces sideways scrolling")
+    void tc12_mobileOneColumn() {
+        useViewport(MOBILE);
+        openDashboard();
+
+        assertThat(columns()).isEqualTo(1);
+        Object scrollWidth = page.evaluate("document.documentElement.scrollWidth");
+        assertThat(((Number) scrollWidth).intValue()).isLessThanOrEqualTo(MOBILE[0]);
+    }
+
+    @Test
+    @Tag("TC-12")
+    @DisplayName("TC-12 mix of photo cards and placeholder cards (15 + 15)")
+    void tc12_photoAndPlaceholderCards() {
+        openDashboard();
+
+        assertThat(page.locator(".report-card:has(img)").count()).isEqualTo(15);
+        assertThat(page.locator(".report-card:not(:has(img))").count()).isEqualTo(15);
+    }
+
+    @Test
+    @Tag("TC-01")
+    @DisplayName("TC-01 newest report is the first card")
+    void tc01_newestFirst() {
+        openDashboard();
+
+        assertThat(page.locator(".report-card .card-title").first().innerText()).isEqualTo("Seed report 00");
+    }
+
+    @Test
+    @Tag("TC-04")
+    @DisplayName("TC-04 clicking the Roadworks pill shows only the 10 Roadworks reports")
+    void tc04_filterPill() {
+        openDashboard();
+
+        page.click(".filter-pills >> text=Roadworks");
+        page.waitForURL(url -> url.contains("category=ROADWORKS"));
+
+        assertThat(page.locator(".report-card").count()).isEqualTo(10);
+        assertThat(page.locator(".report-card .badge-roadworks").count()).isEqualTo(10);
+    }
+
+    @Test
+    @Tag("TC-04")
+    @DisplayName("TC-04 /?category=INVALID falls back to All Reports")
+    void tc04_invalidCategory() {
+        page.navigate(baseUrl() + "/?category=INVALID");
+        page.waitForSelector(".report-card");
+
+        assertThat(page.locator(".report-card").count()).isGreaterThanOrEqualTo(30);
+    }
+}

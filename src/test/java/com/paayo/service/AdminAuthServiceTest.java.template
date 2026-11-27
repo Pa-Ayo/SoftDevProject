@@ -1,0 +1,184 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once AdminAuthService, AdminRepository
+ * and Admin exist, then fix the lines marked TODO (constructor, hash format, mail message type).
+ * Covers: TC-06 (wrong password), TC-17 (Forgot Password). Requirements: FR-13, NFR-06, NFR-15.
+ * Mail and the database are mocked; passwords use the real BCrypt.
+ */
+package com.paayo.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.paayo.model.Admin;
+import com.paayo.repository.AdminRepository;
+import com.paayo.util.FirestoreTypes;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.HexFormat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+@ExtendWith(MockitoExtension.class)
+class AdminAuthServiceTest {
+    private static final String RAW_TOKEN = "raw-reset-token-123";
+
+    @Mock
+    private AdminRepository adminRepository;
+    @Mock
+    private JavaMailSender mailSender;
+
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private AdminAuthService service;
+    private Admin admin;
+
+    @BeforeEach
+    void setUp() {
+        service = new AdminAuthService(adminRepository, encoder, mailSender);   // TODO: match the real constructor
+        admin = new Admin();
+        admin.setAdminId("admin-1");
+        admin.setUsername("felix");
+        admin.setEmail("felix@example.com");
+        admin.setPasswordHash(encoder.encode("Old-Passw0rd"));
+        lenient().when(adminRepository.findByUsername("felix")).thenReturn(admin);
+        lenient().when(adminRepository.findByEmail("felix@example.com")).thenReturn(admin);
+        lenient().when(adminRepository.findByUsername("nobody")).thenReturn(null);
+        lenient().when(adminRepository.findByEmail("nobody")).thenReturn(null);
+    }
+
+    /** TODO: the proposal says "SHA-256 hashed token"; switch to Base64 here if the code does that. */
+    private static String sha256(String raw) {
+        try {
+            byte[] d = MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(d);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void tokenExpiresIn(Duration fromNow) {
+        admin.setResetTokenHash(sha256(RAW_TOKEN));
+        admin.setResetTokenExpiresAt(FirestoreTypes.now().plus(fromNow));
+        lenient().when(adminRepository.findByResetTokenHash(anyString())).thenAnswer(i ->
+                sha256(RAW_TOKEN).equals(i.getArgument(0)) ? admin : null);
+    }
+
+    // ------------------------------------------------------------ TC-06 (wrong password)
+    @Test
+    @Tag("TC-06")
+    @DisplayName("TC-06 authenticate: right password true, wrong password false, unknown user false")
+    void tc06_authenticate() {
+        assertThat(service.authenticate("felix", "Old-Passw0rd")).isTrue();
+        assertThat(service.authenticate("felix", "wrong")).isFalse();
+        assertThat(service.authenticate("nobody", "Old-Passw0rd")).isFalse();
+    }
+
+    // ------------------------------------------------------------ TC-17(a)
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(a) valid admin: hashed token saved (not the raw one), expires in 30 min, link emailed")
+    void tc17a_validAdminGetsHashedTokenAndEmail() {
+        service.initiatePasswordReset("felix");
+
+        ArgumentCaptor<String> hash = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<LocalDateTime> expiry = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(adminRepository).saveResetToken(eq("admin-1"), hash.capture(), expiry.capture());
+        assertThat(hash.getValue()).isNotBlank();
+        assertThat(expiry.getValue())
+                .isAfter(FirestoreTypes.now().plusMinutes(29))
+                .isBefore(FirestoreTypes.now().plusMinutes(31));
+
+        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);   // TODO: type
+        verify(mailSender).send(mail.capture());
+        assertThat(mail.getValue().getText()).contains("/admin/reset-password?token=");
+        // the raw token is in the email, only its hash is stored
+        assertThat(mail.getValue().getText()).doesNotContain(hash.getValue());
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(a) unknown username: no token, no email, and no error (same outcome as a valid one)")
+    void tc17a_unknownUserChangesNothingAndDoesNotFail() {
+        assertThatCode(() -> service.initiatePasswordReset("nobody")).doesNotThrowAnyException();
+
+        verify(adminRepository, never()).saveResetToken(anyString(), anyString(), any());
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    // ------------------------------------------------------------ TC-17(b)
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(b) valid token: password becomes a BCrypt hash of the new password")
+    void tc17b_validTokenResetsPassword() {
+        tokenExpiresIn(Duration.ofMinutes(10));
+
+        assertThat(service.validateResetToken(RAW_TOKEN)).isTrue();
+        assertThat(service.resetPassword(RAW_TOKEN, "New-Passw0rd!")).isTrue();
+
+        ArgumentCaptor<String> newHash = ArgumentCaptor.forClass(String.class);
+        verify(adminRepository).updatePasswordHash(eq("admin-1"), newHash.capture());
+        assertThat(newHash.getValue()).isNotEqualTo("New-Passw0rd!");
+        assertThat(encoder.matches("New-Passw0rd!", newHash.getValue())).isTrue();
+        assertThat(encoder.matches("Old-Passw0rd", newHash.getValue())).isFalse();
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(b) a new password shorter than 8 characters is refused")
+    void tc17b_shortPasswordRefused() {
+        tokenExpiresIn(Duration.ofMinutes(10));
+
+        assertThat(service.resetPassword(RAW_TOKEN, "short")).isFalse();
+        verify(adminRepository, never()).updatePasswordHash(anyString(), anyString());
+    }
+
+    // ------------------------------------------------------------ TC-17(c)
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(c) expired token (30 min or more) is rejected")
+    void tc17c_expiredTokenRejected() {
+        tokenExpiresIn(Duration.ofMinutes(-1));
+
+        assertThat(service.validateResetToken(RAW_TOKEN)).isFalse();
+        assertThat(service.resetPassword(RAW_TOKEN, "New-Passw0rd!")).isFalse();
+        verify(adminRepository, never()).updatePasswordHash(anyString(), anyString());
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(c) unknown token is rejected")
+    void tc17c_unknownTokenRejected() {
+        tokenExpiresIn(Duration.ofMinutes(10));
+
+        assertThat(service.validateResetToken("some-other-token")).isFalse();
+        assertThat(service.resetPassword("some-other-token", "New-Passw0rd!")).isFalse();
+    }
+
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(c) after a successful reset the token is cleared, so it cannot be used twice")
+    void tc17c_tokenIsSingleUse() {
+        tokenExpiresIn(Duration.ofMinutes(10));
+
+        assertThat(service.resetPassword(RAW_TOKEN, "New-Passw0rd!")).isTrue();
+
+        // TODO: adjust to however the code invalidates the token (cleared hash/expiry in saveResetToken, or a new method)
+        verify(adminRepository).saveResetToken(eq("admin-1"), eq(null), eq(null));
+    }
+}

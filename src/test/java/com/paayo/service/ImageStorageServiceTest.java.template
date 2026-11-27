@@ -1,0 +1,71 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once ImageStorageService exists,
+ * then fix the lines marked TODO. storePhoto (Cloudinary) is NOT tested here: it is mocked elsewhere (NFR-15).
+ * Covers: TC-16 (photo rules). Requirements: FR-08, FR-12, NFR-09.
+ */
+package com.paayo.service;
+
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.mock.web.MockMultipartFile;
+
+@Tag("TC-16")
+class ImageStorageServiceTest {
+    private static final long FIVE_MB = 5L * 1024 * 1024;
+    private ImageStorageService service;
+
+    @BeforeEach
+    void setUp() {
+        // TODO: match the real constructor (the proposal lists maxFileSizeBytes and allowedContentTypes)
+        service = new ImageStorageService(FIVE_MB, List.of("image/jpeg", "image/png", "image/webp"));
+    }
+
+    private MockMultipartFile file(String name, String type, int bytes) {
+        return new MockMultipartFile("photoFile", name, type, new byte[bytes]);
+    }
+
+    @ParameterizedTest(name = "TC-16 accepted: {0} ({1})")
+    @CsvSource({"photo.jpg,image/jpeg", "photo.png,image/png", "photo.webp,image/webp"})
+    void allowedFormatsAreAccepted(String name, String type) {
+        assertThatCode(() -> service.validatePhoto(file(name, type, 1024 * 1024))).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("TC-16 exactly 5 MB is accepted")
+    void exactlyFiveMbIsAccepted() {
+        assertThatCode(() -> service.validatePhoto(file("big.jpg", "image/jpeg", (int) FIVE_MB)))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("TC-16(c) 5 MB + 1 byte and 6 MB are rejected")
+    void oversizedIsRejected() {
+        assertThatThrownBy(() -> service.validatePhoto(file("big.jpg", "image/jpeg", (int) FIVE_MB + 1)))
+                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> service.validatePhoto(file("huge.jpg", "image/jpeg", 6 * 1024 * 1024)))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @ParameterizedTest(name = "TC-16(c) rejected: {0} ({1})")
+    @CsvSource({"notes.pdf,application/pdf", "virus.exe,application/octet-stream",
+            "image.gif,image/gif", "page.html,text/html"})
+    void disallowedFormatsAreRejected(String name, String type) {
+        assertThatThrownBy(() -> service.validatePhoto(file(name, type, 1024)))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName("TC-16(c) a .jpg name with a non-image content type is rejected")
+    void wrongContentTypeWithImageNameIsRejected() {
+        assertThatThrownBy(() -> service.validatePhoto(file("trick.jpg", "application/x-msdownload", 1024)))
+                .isInstanceOf(RuntimeException.class);
+    }
+}

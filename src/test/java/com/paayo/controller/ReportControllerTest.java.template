@@ -1,0 +1,169 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once ReportController and the security
+ * configuration exist, then fix the lines marked TODO (class names, view/model names).
+ * Fast web-layer test: services are mocked, no database, no browser.
+ * Covers: TC-01 (302 to /), TC-02/TC-03 (server-side rejection), TC-04, TC-14 (XSS, CSRF, privacy notice).
+ * Requirements: FR-01, FR-02, FR-08, FR-09, NFR-09, NFR-10.
+ */
+package com.paayo.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+import com.paayo.config.SecurityConfig;
+import com.paayo.model.Category;
+import com.paayo.model.Report;
+import com.paayo.model.ReportStatus;
+import com.paayo.service.AdminAuthService;
+import com.paayo.service.NewsService;
+import com.paayo.service.ReportService;
+import java.util.List;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.RequestBuilder;
+
+@WebMvcTest(ReportController.class)
+@Import(SecurityConfig.class)   // TODO: the class that allows "/" and "/reports/**" for everyone and enables CSRF
+class ReportControllerTest {
+    @Autowired
+    private MockMvc mvc;
+    @MockitoBean
+    private ReportService reportService;
+    @MockitoBean
+    private NewsService newsService;
+    @MockitoBean
+    private AdminAuthService adminAuthService;   // TODO: remove if SecurityConfig does not need it
+
+    private Report report(String title, Category category) {
+        Report r = new Report();
+        r.setReportId("r-" + title.hashCode());
+        r.setTitle(title);
+        r.setCategory(category);
+        r.setLocation("Banilad");
+        r.setDescription("Description");
+        r.setStatus(ReportStatus.REPORTED);
+        return r;
+    }
+
+    /** A form post to /reports/new, with or without the CSRF token. */
+    private RequestBuilder submit(String title, boolean withCsrfToken) {
+        var request = multipart("/reports/new")
+                .file(new MockMultipartFile("photoFile", "", "application/octet-stream", new byte[0]))
+                .param("title", title)
+                .param("category", "SANITATION")
+                .param("location", "A.S. Fortuna St.")
+                .param("description", "Debris blocks the drain.");
+        if (withCsrfToken) {
+            return request.with(csrf());
+        }
+        return request;
+    }
+
+    // ---------------------------------------------------------------- TC-01
+    @Test
+    @Tag("TC-01")
+    @DisplayName("TC-01 valid multipart POST /reports/new without login answers 302 to /")
+    void tc01_validSubmitRedirectsHome() throws Exception {
+        mvc.perform(submit("Clogged drain", true))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/"));
+    }
+
+    // ---------------------------------------------------------------- TC-02 / TC-03
+    @Test
+    @Tag("TC-02")
+    @Tag("TC-03")
+    @DisplayName("TC-02/03 blank or 101-char title: form is shown again with an error and nothing is saved")
+    void tc02_invalidSubmitIsNotSaved() throws Exception {
+        mvc.perform(submit("   ", true))
+                .andExpect(status().isOk())
+                .andExpect(view().name("report"));   // TODO: the form view name
+        mvc.perform(submit("t".repeat(101), true))
+                .andExpect(status().isOk())
+                .andExpect(view().name("report"));
+
+        verify(reportService, never()).submitReport(any(), any());
+    }
+
+    // ---------------------------------------------------------------- TC-04
+    @Test
+    @Tag("TC-04")
+    @DisplayName("TC-04 /?category=ROADWORKS shows only the Roadworks reports")
+    void tc04_filterByCategory() throws Exception {
+        List<Report> roadworks = List.of(report("Pothole", Category.ROADWORKS));
+        when(reportService.getReportsByCategory(Category.ROADWORKS)).thenReturn(roadworks);
+
+        mvc.perform(get("/").param("category", "ROADWORKS"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("index"))
+                .andExpect(model().attribute("reports", roadworks))
+                .andExpect(model().attribute("selectedCategory", "ROADWORKS"));
+        verify(reportService, never()).getAllReports();
+    }
+
+    @Test
+    @Tag("TC-04")
+    @DisplayName("TC-04 /?category=INVALID falls back to All")
+    void tc04_invalidCategoryFallsBackToAll() throws Exception {
+        List<Report> all = List.of(report("Pothole", Category.ROADWORKS), report("Garbage", Category.SANITATION));
+        when(reportService.getAllReports()).thenReturn(all);
+
+        mvc.perform(get("/").param("category", "INVALID"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("reports", all));
+        verify(reportService, never()).getReportsByCategory(any());
+    }
+
+    // ---------------------------------------------------------------- TC-14
+    @Test
+    @Tag("TC-14")
+    @DisplayName("TC-14 <script> in a title is shown as text (HTML-escaped), never as a live script")
+    void tc14_scriptInTitleIsEscaped() throws Exception {
+        when(reportService.getAllReports()).thenReturn(List.of(report("<script>alert(1)</script>", Category.SANITATION)));
+
+        String html = mvc.perform(get("/")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("&lt;script&gt;alert(1)&lt;/script&gt;");
+        assertThat(html).doesNotContain("<script>alert(1)</script>");
+    }
+
+    @Test
+    @Tag("TC-14")
+    @DisplayName("TC-14 POST without a CSRF token is rejected (403) and nothing is saved")
+    void tc14_postWithoutCsrfIsRejected() throws Exception {
+        mvc.perform(submit("Clogged drain", false))
+                .andExpect(status().isForbidden());
+
+        verify(reportService, never()).submitReport(any(), any());
+    }
+
+    @Test
+    @Tag("TC-14")
+    @DisplayName("TC-14 the report form shows the privacy notice (RA 10173)")
+    void tc14_privacyNoticeIsShown() throws Exception {
+        mvc.perform(get("/reports/new"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Prototype System:")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Do not enter sensitive personal information")));
+    }
+}

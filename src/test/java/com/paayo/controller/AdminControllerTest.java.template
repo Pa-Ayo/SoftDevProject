@@ -1,0 +1,141 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once AdminController and the security
+ * configuration exist, then fix the lines marked TODO (class names, role name, how login is wired).
+ * Fast web-layer test: services are mocked. Covers: TC-05, TC-06, TC-17 (generic notice).
+ * Requirements: FR-05, FR-13, NFR-07.
+ */
+package com.paayo.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
+import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.paayo.config.SecurityConfig;
+import com.paayo.model.ReportStatus;
+import com.paayo.service.AdminAuthService;
+import com.paayo.service.NewsService;
+import com.paayo.service.ReportService;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+@WebMvcTest(AdminController.class)
+@Import(SecurityConfig.class)   // TODO: your security configuration
+class AdminControllerTest {
+    @Autowired
+    private MockMvc mvc;
+    @MockitoBean
+    private ReportService reportService;
+    @MockitoBean
+    private NewsService newsService;
+    @MockitoBean
+    private AdminAuthService adminAuthService;
+
+    // ---------------------------------------------------------------- TC-06
+    @Test
+    @Tag("TC-06")
+    @Tag("NFR-07")
+    @DisplayName("TC-06 unauthenticated GET /admin/dashboard answers 302 to /admin/login")
+    void tc06_dashboardNeedsLogin() throws Exception {
+        mvc.perform(get("/admin/dashboard"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("**/admin/login"));
+    }
+
+    @Test
+    @Tag("TC-06")
+    @Tag("NFR-07")
+    @DisplayName("TC-06 unauthenticated POST /admin/updateStatus answers 302 to login and writes nothing")
+    void tc06_updateStatusNeedsLogin() throws Exception {
+        mvc.perform(post("/admin/updateStatus").param("reportId", "r1").param("status", "RESOLVED").with(csrf()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("**/admin/login"));
+
+        verify(reportService, never()).updateReportStatus(any(), any());
+    }
+
+    @Test
+    @Tag("TC-06")
+    @DisplayName("TC-06 unauthenticated POST /admin/news/fetch is also blocked")
+    void tc06_newsFetchNeedsLogin() throws Exception {
+        mvc.perform(post("/admin/news/fetch").with(csrf()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("**/admin/login"));
+
+        verify(newsService, never()).fetchAndPublishNews();
+    }
+
+    @Test
+    @Tag("TC-06")
+    @DisplayName("TC-06 wrong-password login: back to /admin/login?error, no session")
+    void tc06_wrongPassword() throws Exception {
+        // TODO: if login is a controller method (not Spring formLogin), mock adminAuthService.authenticate(...) -> false
+        mvc.perform(formLogin("/admin/login").user("felix").password("wrong"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/admin/login?error"))
+                .andExpect(unauthenticated());
+    }
+
+    @Test
+    @Tag("TC-06")
+    @DisplayName("TC-06 login, forgot-password and reset-password pages are open to everyone")
+    void tc06_recoveryPagesArePublic() throws Exception {
+        mvc.perform(get("/admin/login")).andExpect(status().isOk());
+        mvc.perform(get("/admin/forgot-password")).andExpect(status().isOk());
+    }
+
+    // ---------------------------------------------------------------- TC-05
+    @Test
+    @Tag("TC-05")
+    @WithMockUser(roles = "ADMIN")   // TODO: the role your security config expects
+    @DisplayName("TC-05 logged-in admin changes a status and is sent back to the dashboard")
+    void tc05_adminChangesStatus() throws Exception {
+        mvc.perform(post("/admin/updateStatus").param("reportId", "r1").param("status", "IN_PROGRESS").with(csrf()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/admin/dashboard"));
+
+        verify(reportService).updateReportStatus("r1", ReportStatus.IN_PROGRESS);
+    }
+
+    @Test
+    @Tag("TC-05")
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("TC-05 an invalid status value is not passed to the service")
+    void tc05_invalidStatusIsIgnored() throws Exception {
+        mvc.perform(post("/admin/updateStatus").param("reportId", "r1").param("status", "DELETED").with(csrf()));
+
+        verify(reportService, never()).updateReportStatus(any(), any());
+    }
+
+    // ---------------------------------------------------------------- TC-17(a)
+    @Test
+    @Tag("TC-17")
+    @DisplayName("TC-17(a) known and unknown usernames get exactly the same response (no account guessing)")
+    void tc17a_sameResponseForKnownAndUnknown() throws Exception {
+        MvcResult known = mvc.perform(post("/admin/forgot-password").param("identifier", "felix").with(csrf()))
+                .andReturn();
+        MvcResult unknown = mvc.perform(post("/admin/forgot-password").param("identifier", "nobody").with(csrf()))
+                .andReturn();
+
+        assertThat(unknown.getResponse().getStatus()).isEqualTo(known.getResponse().getStatus());
+        assertThat(unknown.getResponse().getRedirectedUrl()).isEqualTo(known.getResponse().getRedirectedUrl());
+        assertThat(unknown.getResponse().getContentAsString()).isEqualTo(known.getResponse().getContentAsString());
+        assertThat(unknown.getFlashMap()).isEqualTo(known.getFlashMap());
+    }
+}

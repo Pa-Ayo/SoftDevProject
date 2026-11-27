@@ -1,0 +1,64 @@
+/*
+ * TEMPLATE: copy to src/test/java/com/paayo/newsbot/TextParaphraserTest.java and remove ".template".
+ * Written from the proposal's UML (paraphrase(String): String, maxSummaryLength = 300, FR-07 / TC-11).
+ * Adjust the constructor call to match the real TextParaphraser.
+ */
+package com.paayo.newsbot;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class TextParaphraserTest {
+    private static final int MAX = 300;
+    private TextParaphraser paraphraser;
+
+    @BeforeEach
+    void setUp() {
+        paraphraser = new TextParaphraser(MAX);   // TODO: match the real constructor
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\n\t"})
+    @DisplayName("blank or null input gives an empty string")
+    void blankGivesEmpty(String input) {
+        assertThat(paraphraser.paraphrase(input)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("short text is kept as is")
+    void shortTextKept() {
+        String text = "Road works start Monday.";
+        assertThat(paraphraser.paraphrase(text)).isEqualTo(text);
+    }
+
+    @Test
+    @DisplayName("long text never exceeds the maximum length")
+    void longTextIsShortened() {
+        String text = "The road will be closed for repairs. ".repeat(50);
+        assertThat(paraphraser.paraphrase(text).length()).isLessThanOrEqualTo(MAX);
+    }
+
+    @Test
+    @DisplayName("one very long sentence is cut at a word boundary, not mid-word")
+    void singleLongSentenceCutAtWord() {
+        String text = "construction ".repeat(100).trim();
+        String result = paraphraser.paraphrase(text);
+
+        assertThat(result.length()).isLessThanOrEqualTo(MAX);
+        assertThat(result).doesNotEndWith("constructio");   // no half words
+    }
+
+    @Test
+    @DisplayName("same input always gives the same output (deterministic)")
+    void deterministic() {
+        String text = "Drainage declogging begins. Residents should not throw garbage. ".repeat(10);
+        assertThat(paraphraser.paraphrase(text)).isEqualTo(paraphraser.paraphrase(text));
+    }
+}

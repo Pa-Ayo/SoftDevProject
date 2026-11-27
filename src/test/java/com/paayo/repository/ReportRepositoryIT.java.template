@@ -1,0 +1,109 @@
+/*
+ * TEMPLATE (not compiled yet): remove ".template" from the file name once ReportRepository and Report exist,
+ * then fix the lines marked TODO. Runs on the Firestore emulator: mvn verify -Pintegration
+ * Covers: TC-03 (what is stored), TC-12 (30+ reports across 3 categories), TC-05 (status update in the database).
+ * Requirements: FR-03, FR-05, NFR-04.
+ */
+package com.paayo.repository;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.Firestore;
+import com.paayo.model.Category;
+import com.paayo.model.Report;
+import com.paayo.model.ReportStatus;
+import com.paayo.support.AbstractFirestoreIT;
+import com.paayo.util.FirestoreTypes;
+import java.time.LocalDateTime;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+class ReportRepositoryIT extends AbstractFirestoreIT {
+    @Autowired
+    private ReportRepository repository;
+    @Autowired
+    private Firestore firestore;
+
+    private Report report(int n, Category category, String imageUrl) {
+        Report r = new Report();
+        r.setTitle("Test report " + n);
+        r.setCategory(category);
+        r.setLocation("Test street " + n);
+        r.setDescription("Description " + n);
+        r.setImageUrl(imageUrl);
+        r.setStatus(ReportStatus.REPORTED);
+        LocalDateTime now = FirestoreTypes.now();
+        r.setCreatedAt(now);
+        r.setUpdatedAt(now);
+        return r;
+    }
+
+    @Test
+    @Tag("TC-03")
+    @DisplayName("TC-03 save stores auto-ID, title, category, location, description, imageUrl, status, createdAt, updatedAt")
+    void tc03_savedDocumentHasAllFields() throws Exception {
+        Report saved = repository.save(report(1, Category.SANITATION, null));
+
+        assertThat(saved.getReportId()).isNotBlank();   // auto-generated ID
+        DocumentSnapshot doc = firestore.collection("reports").document(saved.getReportId()).get().get();
+        assertThat(doc.exists()).isTrue();
+        assertThat(doc.getString("title")).isEqualTo("Test report 1");
+        assertThat(doc.getString("category")).isEqualTo("SANITATION");
+        assertThat(doc.getString("location")).isEqualTo("Test street 1");
+        assertThat(doc.getString("description")).isEqualTo("Description 1");
+        assertThat(doc.getString("status")).isEqualTo("REPORTED");
+        assertThat(doc.getString("imageUrl")).isNull();
+        assertThat(doc.getTimestamp("createdAt")).isNotNull();
+        assertThat(doc.getTimestamp("updatedAt")).isNotNull();
+    }
+
+    @Test
+    @Tag("TC-03")
+    @Tag("TC-12")
+    @DisplayName("TC-12 30 reports (10 per category, with and without photo) are all stored and can be read back")
+    void tc12_thirtyReportsStored() {
+        for (int i = 0; i < 30; i++) {
+            Category category = Category.values()[i % 3];
+            String photo = (i % 2 == 0) ? "https://example.com/photo-" + i + ".jpg" : null;
+            repository.save(report(i, category, photo));
+        }
+
+        assertThat(repository.findAll()).hasSize(30);
+        for (Category category : Category.values()) {
+            assertThat(repository.findByCategory(category)).hasSize(10)
+                    .allSatisfy(r -> assertThat(r.getCategory()).isEqualTo(category));
+        }
+        // the emulator does not check indexes: test the category filter once on production too (docs/DATABASE_SETUP.md)
+    }
+
+    @Test
+    @Tag("TC-05")
+    @DisplayName("TC-05 updateStatus changes status and updatedAt in the database, createdAt stays")
+    void tc05_updateStatusInDatabase() throws Exception {
+        Report saved = repository.save(report(1, Category.ROADWORKS, null));
+        DocumentSnapshot before = firestore.collection("reports").document(saved.getReportId()).get().get();
+
+        repository.updateStatus(saved.getReportId(), ReportStatus.IN_PROGRESS);
+
+        DocumentSnapshot after = firestore.collection("reports").document(saved.getReportId()).get().get();
+        assertThat(after.getString("status")).isEqualTo("IN_PROGRESS");
+        assertThat(after.getTimestamp("createdAt")).isEqualTo(before.getTimestamp("createdAt"));
+        assertThat(after.getTimestamp("updatedAt")).isGreaterThanOrEqualTo(before.getTimestamp("updatedAt"));
+    }
+
+    @Test
+    @Tag("TC-01")
+    @DisplayName("TC-01 newest report is returned first")
+    void tc01_newestFirst() {
+        Report older = report(1, Category.SANITATION, null);
+        older.setCreatedAt(FirestoreTypes.now().minusHours(2));
+        Report newer = report(2, Category.SANITATION, null);
+        repository.save(older);
+        repository.save(newer);
+
+        assertThat(repository.findAll()).extracting(Report::getTitle).containsExactly("Test report 2", "Test report 1");
+    }
+}
