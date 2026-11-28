@@ -1,0 +1,28 @@
+<!--/*
+  File:        fragments.html
+  Module:      Public pages
+  Purpose:     Page parts shared by several screens: head, logo and links.
+  Responsible: Ythan Joshua Costelo
+*/-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title} + ' | Pa-Ayo'">Pa-Ayo</title>
+  <meta name="theme-color" content="#1c3566">
+  <link rel="icon" type="image/png" th:href="@{/images/favicon.png}">
+  <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+  <a th:fragment="brand" class="brand" th:href="@{/}">
+    <img class="brand-logo" th:src="@{/images/logo.png}" alt="" width="55" height="72">
+    <span>
+      <span class="brand-name">Pa-Ayo</span>
+      <span class="brand-motto">Atong komunidad. Atong responsibilidad.</span>
+    </span>
+  </a>
+
+  <a th:fragment="back" class="back-link" th:href="@{/}"><span aria-hidden="true">&larr;</span> Back to Public Dashboard</a>
+</body>
+</html>
