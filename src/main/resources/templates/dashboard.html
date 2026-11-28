@@ -1,0 +1,120 @@
+<!--/*
+  File:        dashboard.html
+  Module:      Public dashboard (S1)
+  Purpose:     Shows the hot news, the government news list, the category filter and the 4-column report grid.
+  Responsible: Ythan Joshua Costelo
+*/-->
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Community Reports')}"></head>
+<body>
+  <header class="site-header">
+    <a th:replace="~{fragments :: brand}"></a>
+    <div class="header-actions">
+      <a class="header-link" th:href="@{/admin/login}">Admin Login</a>
+      <a class="button header-cta" th:href="@{/reports/new}"><span aria-hidden="true">+</span> Report an Issue</a>
+    </div>
+  </header>
+
+  <!--/* The newest items are the Hot News cards; the list beside them has the older ones. The reports use the full width. */-->
+  <main class="dashboard" th:with="hotCount=3">
+    <p class="banner banner-ok" role="status" th:if="${message}">
+      <svg class="check" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7 12.5l3.5 3.5L17 9"/></svg>
+      <span th:text="${message}"></span>
+      <a href="#new-report">See your report</a>
+    </p>
+
+    <div class="news-row">
+      <aside class="news" aria-labelledby="news-heading">
+        <h2 id="news-heading" class="news-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg> Government News</h2>
+        <div class="news-list" tabindex="0" role="region" aria-labelledby="news-heading">
+          <p class="empty" th:if="${news == null}">News is unavailable right now. Please try again later.</p>
+          <p class="empty" th:if="${news != null and news.size() <= hotCount}">No other news yet.</p>
+          <article class="news-item" th:each="item, i : ${news}" th:if="${i.index >= hotCount}"
+                   th:style="|--i:${i.index}|">
+            <div class="news-top">
+              <img class="news-image" th:src="${item.imageUrl} ?: @{/images/news-placeholder.png}" alt=""
+                   loading="lazy" referrerpolicy="no-referrer"
+                   onerror="this.onerror=null;this.src='/images/news-placeholder.png'">
+              <div>
+                <p class="news-source" th:text="${item.sourceName}">Source</p>
+                <h3 class="news-title" th:text="${item.title}">Headline</h3>
+              </div>
+            </div>
+            <p class="news-summary" th:text="${item.summary}">Summary</p>
+            <div class="news-bottom" th:fragment="newsBottom(item)">
+              <time th:datetime="${item.publishedDate}"
+                    th:text="${#temporals.format(item.publishedDate, 'MMM d, yyyy')}">Nov 19, 2026</time>
+              <a th:href="${item.sourceUrl}" target="_blank" rel="noopener noreferrer"
+                 th:aria-label="|Read Source: ${item.title} (opens in a new tab)|">Read Source</a>
+            </div>
+          </article>
+        </div>
+      </aside>
+
+      <section class="hot" aria-labelledby="hot-heading" th:if="${news != null and !news.isEmpty()}">
+        <h2 id="hot-heading" class="hot-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.7 3.4 5.8 5.2 5.8 11a5.8 5.8 0 0 1-11.6 0c0-2.5 1.2-4.3 2.7-5.7.1 1.6.8 2.7 1.8 3.100C10.2 8 10.6 4.9 12 2.5z"/><path d="M12 19.3a2.4 2.4 0 0 0 2.4-2.4c0-1.5-1.2-2.3-2.4-3.7-1.2 1.4-2.4 2.2-2.4 3.7a2.4 2.4 0 0 0 2.4 2.4z"/></svg> Hot News</h2>
+        <div class="grid hot-grid">
+          <article class="hot-card" th:each="item, i : ${news}" th:if="${i.index < hotCount}" th:style="|--i:${i.index}|">
+            <div class="card-badges"><span class="badge badge-hot">Hot News</span></div>
+            <div class="card-media">
+              <img class="card-photo" th:src="${item.imageUrl} ?: @{/images/news-placeholder.png}" alt=""
+                   referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/images/news-placeholder.png'">
+            </div>
+            <p class="news-source" th:text="${item.sourceName}">Source</p>
+            <h3 class="card-title" th:text="${item.title}">Headline</h3>
+            <p class="card-description" th:text="${item.summary}">Summary</p>
+            <div th:replace="~{:: newsBottom(${item})}"></div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <h1 class="accent">Community Reports</h1>
+    <p class="subtitle">Check existing reports below before filing a new issue in your barangay</p>
+
+    <nav class="pills" aria-label="Filter reports by category">
+      <a class="pill" th:href="@{/}" th:attr="aria-current=${selected == null ? 'page' : null}">All Reports</a>
+      <a class="pill" th:each="category : ${categories}" th:href="@{/(category=${category.name()})}"
+         th:attr="aria-current=${selected == category ? 'page' : null}"
+         th:text="${category.displayName}">Sanitation</a>
+    </nav>
+
+    <p class="banner banner-error" role="alert" th:if="${reports == null}">
+      Reports are unavailable right now. Please try again in a moment.
+    </p>
+    <div class="empty-state" th:if="${reports != null and reports.isEmpty()}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+      <p class="empty-title">No reports here yet.</p>
+      <p>See something broken in your barangay? Be the first to report it.</p>
+      <a class="button" th:href="@{/reports/new}">Report an Issue</a>
+    </div>
+
+    <div class="grid">
+      <article class="card" th:each="report, i : ${reports}" th:style="|--i:${i.index}|"
+               th:classappend="${message != null and i.first} ? 'card-new'"
+               th:id="${message != null and i.first} ? 'new-report'">
+        <div class="card-badges">
+          <span class="badge" th:classappend="|badge-${#strings.toLowerCase(report.category.name())}|"
+                th:text="${report.category.displayName}">Category</span>
+          <span class="badge" th:classappend="|badge-${#strings.toLowerCase(report.status.name())}|"
+                th:text="${report.status.displayName}">Status</span>
+        </div>
+        <div class="card-media">
+          <img class="card-photo" th:src="${report.imageUrl} ?: @{/images/report-placeholder.png}"
+               th:alt="${report.imageUrl} ? |Photo of ${report.title}| : 'No photo provided'"
+               loading="lazy" onerror="this.onerror=null;this.src='/images/report-placeholder.png'">
+        </div>
+        <h2 class="card-title" th:text="${report.title}">Report title</h2>
+        <p class="card-description" th:text="${report.description}">Description</p>
+        <p class="card-location" th:text="${report.location}">Location</p>
+        <time class="card-date" th:datetime="${report.createdAt}"
+              th:text="${#temporals.format(report.createdAt, 'MMM d, yyyy')}">Nov 19, 2026</time>
+      </article>
+    </div>
+  </main>
+
+  <a class="fab" th:href="@{/reports/new}"><span class="fab-plus" aria-hidden="true">+</span><span class="fab-label">Report an Issue</span></a>
+  <script th:src="@{/js/cards.js}"></script>
+</body>
+</html>
